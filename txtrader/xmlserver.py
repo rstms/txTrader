@@ -1,7 +1,15 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+  xmlserver.py
+  ------------
 
-# Copyright (c) 2015 Reliance Systems, Inc.
+  TxTrader XMLRPC server module - Implement user interface functions.
 
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
 
 import sys, mx.DateTime, datetime
 

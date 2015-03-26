@@ -1,6 +1,15 @@
-# py.test 
+# -*- coding: utf-8 -*-
+"""
+  test-client.py
+  --------------
 
-# Copyright (c) 2015 Reliance Systems, Inc.
+  TxTrader unit test script
+
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
+
 
 from txtrader.client import API
 

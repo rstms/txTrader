@@ -1,83 +1,135 @@
-# txTrader  receiver.py
-# stand alone status receiver
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+  monitor.py
+  ----------
 
-# Copyright (c) 2015 Reliance Systems, Inc.
+  TxTrader Monitor class - Instantiate in client to receive event notifications.
+
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
 
 
 from twisted.internet import reactor, protocol
 
 class Monitor():
-  def __init__(self, host='localhost', port=50090, user=None, password=None, on_status=None, on_order=None, on_execution=None, on_quote=None, on_trade=None):
+  def __init__(self, host='localhost', port=50090, user=None, password=None, callbacks=None):
+    """Initialize Monitor:
+      connection parameters: host, port, user, password, 
+      callbacks: {'name':function ...}  
+        where name is one of ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade']
+        and function(data) is the callback that will receive event data
+    """
     self.host = host
     self.port = port
     self.user = user
     self.password = password
-    self.on_status = on_status if on_status else self._on_status
-    self.on_order = on_order if on_order else self._on_order
-    self.on_execution = on_execution if on_execution else self._on_execution
-    self.on_quote = on_quote if on_quote else self._on_quote
-    self.on_trade = on_trade if on_trade else self._on_trade
+    self.channel = ''
+    self.callback_types = ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade']
+    self.flags = 'noquotes notrades'
+
+    if callbacks:
+      self.callbacks = callbacks 
+    else:
+      self.callbacks = {}
+      for cb_type in self.callback_types:
+        self.set_callback(cb_type, self._cb_print)
 
   def listen(self, _reactor):
     f = StatusClientFactory(self)
     reactor.connectTCP(self.host, self.port, f)
 
-  def _handler(self, label, msg):
+  def set_callback(self, cb_type, cb_func):
+    """Set a callback function for a message type."""
+    self.callbacks[cb_type] = cb_func
+
+  def delete_callback(self, cb_type):
+    """Delete a callback function for a message type."""
+    if cb_type in self.callbacks.keys():
+      delete(self.callbacks[cb_type])
+
+  def _callback(self, cb_type, cb_data):
+    if cb_type in self.callbacks.keys():
+      self.callbacks[cb_type](cb_type, cb_data)
+
+  def _cb_print(self, label, msg):
     print('%s: %s' % (label, repr(msg)))
 
-  def _on_status(self, msg):
-    self._handler('status', msg)
-
-  def _on_order(self, msg):
-    self._handler('order', msg)
- 
-  def _on_execution(self, msg):
-    self._handler('execution', msg)
- 
-  def _on_trade(self, msg):
-    self._handler('trade', msg)
- 
-  def _on_quote(self, msg):
-    self._handler('quote', msg)
- 
-
   def run(self):
+    """React to gateway events, returning data via callback functions."""
     self.listen(reactor)
     reactor.run()
 
 
 class StatusClient(protocol.Protocol):
+
+  def __init__(self):
+    self.channel=''
+    self.message_types = []
+    self.channel_map = {}
+    self.last_account = ''
+
+  def connectionMade(self):
+    pass
     
-    def connectionMade(self):
-        print 'connected'
-    
-    def dataReceived(self, data):
-        self.factory.rx.on_status(data)
-        if data.startswith('.connected'):
-          self.transport.write('auth %s %s\n' % (self.factory.rx.user, self.factory.rx.password))
-  
-        #self.transport.loseConnection()
-    
-    def connectionLost(self, reason):
-        print 'connection lost'
+  def dataReceived(self, data):
+    for line in data.strip().split('\n'):
+      self.processLine(line)
+ 
+  def processLine(self, data):
+    if data.startswith('.'):
+      self.factory.rx._callback('status', data)
+      if data.startswith('.connected'):
+        self.transport.write('auth %s %s %s\n' % (self.factory.rx.user, self.factory.rx.password, self.factory.rx.flags))
+      elif data.startswith('.Authorized'):
+        dummy, self.channel = data.split()[:2]
+        # setup channel map now that we have the channel name
+        self.channel_map = {
+            '%s.time: ' % self.channel: 'time',
+            '%s.error:' % self.channel: 'error',
+            '%s.order.' % self.channel: 'order',
+            '%s.open-order.' % self.channel: 'order',
+            '%s.execution.' % self.channel: 'execution',
+            '%s.quote.' % self.channel: 'quote',
+            '%s.trade.' % self.channel: 'trade'}
+        self.account_channel = '%s.current-account' % self.channel
+    else:
+      for cmap in self.channel_map.keys():
+        if data.startswith(cmap):
+          return self.factory.rx._callback(self.channel_map[cmap], data[len(cmap):])
+      # only return current_account message if different from last one
+      if data.startswith(self.account_channel):
+        if self.last_account == data:
+          return
+        else:
+          self.last_account = data
+      self.factory.rx._callback('status', data)
+ 
+
+  def connectionLost(self, reason):
+    pass
 
 class StatusClientFactory(protocol.ClientFactory):
-    protocol = StatusClient 
-    def __init__(self, receiver):
-        self.rx = receiver
+  protocol = StatusClient 
+  def __init__(self, receiver):
+    self.rx = receiver
 
-    def clientConnectionFailed(self, connector, reason):
-        print "Connection failed - goodbye!"
-        reactor.stop()
+  def clientConnectionFailed(self, connector, reason):
+    self.rx._callback('error', 'connection failed')
+    if reactor.running: 
+      reactor.stop()
     
-    def clientConnectionLost(self, connector, reason):
-        print "Connection lost - goodbye!"
-        reactor.stop()
+  def clientConnectionLost(self, connector, reason):
+    self.rx._callback('error', 'connection lost')
+    if reactor.running: 
+      reactor.stop()
 
 
 if __name__ == '__main__':
 
-  _USER = 'gravitar'
-  _PASS = '2GPB1FYDG9dts'
+  _USER = 'change_this_username'
+  _PASS = 'change_this_password'
   rx = Monitor(user=_USER, password=_PASS)
   rx.run()

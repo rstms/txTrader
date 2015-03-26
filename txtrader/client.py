@@ -1,7 +1,15 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+  client.py
+  ---------
 
-# Copyright (c) 2015 Reliance Systems, Inc.
+  TxTrader Client module - Expose class API as user interface.
 
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
 
 import httplib
 import xmlrpclib

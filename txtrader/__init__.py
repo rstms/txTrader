@@ -1,6 +1,14 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+  __init__.py
+  -----------
 
-# Copyright (c) 2015 Reliance Systems, Inc.
+  TxTrader module init
 
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
 
 __all__=['version', 'tcpserver', 'xmlserver', 'tws', 'cqg', 'client', 'monitor']

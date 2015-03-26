@@ -1,7 +1,15 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+  tws.py
+  ------
 
-# Copyright (c) 2015 Reliance Systems, Inc.
+  TxTrader Interactive Brokers TWS API interface module
 
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
 
 from version import __version__, __date__, __label__
 

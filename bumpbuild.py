@@ -1,7 +1,15 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+  bumpbuild.py
+  ------------
 
-# Copyright (c) 2015 Reliance Systems, Inc.  
+  TxTrader build helper script
 
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
 import datetime
 
 filename = 'txtrader/version.py'

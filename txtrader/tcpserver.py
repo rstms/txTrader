@@ -1,7 +1,15 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+  tcpserver.py
+  ------------
 
-# Copyright (c) 2015 Reliance Systems, Inc.
+  TxTrader TCP server module - Implement ASCII line oriented event interface.
 
+  Copyright (c) 2015 Reliance Systems Inc. <mkrueger@rstms.net>
+  Licensed under the MIT license.  See LICENSE for details.
+
+"""
 
 from version import __version__, __date__, __label__
 
@@ -65,7 +73,7 @@ class tcpserver(basic.LineReceiver):
         if self.factory.validate(username, password):
             self.authmap.add(self.transport.getPeer())
             self.factory.api.open_client(self)
-            return '.Authorized'
+            return '.Authorized %s' % self.factory.api.channel
         else:
             self.check_authorized()
             
