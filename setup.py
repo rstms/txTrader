@@ -11,7 +11,7 @@
 """
 
 from distutils.core import setup
-from rsagw.version import __version__
+from txtrader.version import __version__
 setup(
   name='txTrader',
   version=__version__,
