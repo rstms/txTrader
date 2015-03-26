@@ -1,0 +1,2 @@
+#!/bin/sh
+exec envdir $TXTRADER_ENV python -m txtrader.client $*
