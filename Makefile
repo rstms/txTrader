@@ -11,6 +11,10 @@ clean:
 build:
 	@echo "Nothing to do"
 
+config:
+	@echo "Configure"
+	pip install egenix-mx-base
+
 install:
 	python bumpbuild.py
 	python setup.py install
