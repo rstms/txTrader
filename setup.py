@@ -11,10 +11,6 @@ setup(
   author='Matt Krueger',
   author_email='mkrueger@rstms.net',
   url='https://github.com/rstms/txTrader',
-  install_requires=[
-    'Twisted',
-    'egenix-mx-base'
-  ],
   packages=['txtrader'],
   package_dir={'txtrader': 'txtrader'},
 )

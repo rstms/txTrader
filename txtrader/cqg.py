@@ -13,7 +13,7 @@ if __name__=='__main__':
 import sys, win32com.client, mx.DateTime, types, datetime, json, time
 win32com.client.gencache.is_readonly=False
 from win32com.client import Dispatch, constants
-import rsicfg
+from os import environ
 import traceback
 
 QUERY_TIMEOUT_SECONDS = 3
@@ -200,10 +200,10 @@ class CQG_Callback():
 class CQG_Catcher():
     def __init__(self):
         self.label = 'CQG Gateway'
-        self.username = rsicfg.get('rccg-xmlrpc-username', 'rsagw')
-        self.password = rsicfg.get('rccg-xmlrpc-password', 'rsagw')
-        self.xmlrpc_port = int(rsicfg.get('rccg-xmlrpc-port', 'rsagw'))
-        self.tcp_port = int(rsicfg.get('rccg-tcp-port', 'rsagw'))
+        self.username = environ['cqg-xmlrpc-username']
+        self.password = environ['cqg-xmlrpc-password']
+        self.xmlrpc_port = int(environ['cqg-xmlrpc-port'])
+        self.tcp_port = int(environ['cqg-tcp-port'])
         self.channel = 'cqg'
         self.clients=set([])
         self.bardata_callbacks=[]

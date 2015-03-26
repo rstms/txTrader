@@ -2,7 +2,6 @@
 
 # Copyright (c) 2015 Reliance Systems, Inc.
 
-
 from txtrader.client import API
 
 def test_add_symbol():

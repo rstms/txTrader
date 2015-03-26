@@ -9,7 +9,7 @@ import sys, mx.DateTime, types, datetime
 import json
 import time
 
-import rsicfg
+from os import environ
 
 QUERY_TIMEOUT_SECONDS = 3
 
@@ -128,10 +128,10 @@ class TWS():
 
     def __init__(self):
         #self.output('TWS init')
-        self.username = rsicfg.get('twsgw-xmlrpc-username', 'rsagw')
-        self.password = rsicfg.get('twsgw-xmlrpc-password', 'rsagw')
-        self.xmlrpc_port = int(rsicfg.get('twsgw-xmlrpc-port', 'rsagw'))
-        self.tcp_port = int(rsicfg.get('twsgw-tcp-port', 'rsagw'))
+        self.username = environ['tws-xmlrpc-username']
+        self.password = environ['tws-xmlrpc-password']
+        self.xmlrpc_port = int(environ['tws-xmlrpc-port'])
+        self.tcp_port = int(environ['tws-tcp-port'])
         self.label = 'TWS Gateway'
         self.channel = 'tws'
         self.current_account=''
@@ -422,9 +422,9 @@ class TWS():
     
     def connect(self):
         self.update_connection_status('Connecting')
-        api_hostname = rsicfg.get('twsgw-api-hostname', 'rsagw')
-        api_port = int(rsicfg.get('twsgw-api-port', 'rsagw'))
-        api_client_id = int(rsicfg.get('twsgw-api-client-id', 'rsagw'))
+        api_hostname = environ['tws-api-hostname']
+        api_port = int(environ['tws-api-port'])
+        api_client_id = int(environ['tws-api-client-id'])
         self.output('Connnecting to TWS API at %s:%d with client id %d' % (api_hostname, api_port, api_client_id))
         self.tws_conn = Connection.create(host=api_hostname, port=api_port, clientId=api_client_id)
         self.tws_conn.registerAll(self.reply_handler)

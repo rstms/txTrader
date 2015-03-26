@@ -3,12 +3,12 @@
 # Copyright (c) 2015 Reliance Systems, Inc.
 
 
-import rsicfg
 import httplib
 import xmlrpclib
 import socket
 import traceback
 from sys import stderr
+from os import environ
 
 XMLRPC_TIMEOUT=15
 
@@ -34,11 +34,11 @@ class TimeoutTransport(xmlrpclib.Transport):
 class API():
   def __init__(self, server):
     self.server=server
-    self.hostname = rsicfg.get('%s-hostname' % server, 'rsagw')
-    username = rsicfg.get('%s-xmlrpc-username' % server, 'rsagw')
-    password = rsicfg.get('%s-xmlrpc-password' % server, 'rsagw')
-    self.port = rsicfg.get('%s-xmlrpc-port' % server, 'rsagw')
-    self.account = rsicfg.get('%s-account' % server, 'rsagw')
+    self.hostname = environ['%s-hostname' % server]
+    username = environ['%s-xmlrpc-username' % server]
+    password = environ['%s-xmlrpc-password' % server]
+    self.port = environ['%s-xmlrpc-port' % server]
+    self.account = environ['%s-account' % server]
     url='http://%s:%s@%s:%s' % (username, password, self.hostname, self.port)
     self.transport = TimeoutTransport(timeout=XMLRPC_TIMEOUT)
     self.proxy = xmlrpclib.ServerProxy(url, transport=self.transport, verbose=False, allow_none=True)

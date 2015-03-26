@@ -1,2 +1,2 @@
 #!/bin/sh
-exec setuidgid txtrader multilog t s10000000 /var/log/txtrader
+exec multilog t s10000000 /var/log/txtrader

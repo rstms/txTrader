@@ -33,4 +33,4 @@ TESTS := $(wildcard txtrader/test-*.py)
 
 test: $(TESTS)
 	@echo "Testing..."
-	cd txtrader; py.test -vvx $(notdir $^)
+	cd txtrader; envdir ../service/env py.test -vvx $(notdir $^)
