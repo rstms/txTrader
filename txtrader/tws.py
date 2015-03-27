@@ -136,10 +136,10 @@ class TWS():
 
     def __init__(self):
         #self.output('TWS init')
-        self.username = environ['tws-xmlrpc-username']
-        self.password = environ['tws-xmlrpc-password']
-        self.xmlrpc_port = int(environ['tws-xmlrpc-port'])
-        self.tcp_port = int(environ['tws-tcp-port'])
+        self.username = environ['TXTRADER_USERNAME']
+        self.password = environ['TXTRADER_PASSWORD']
+        self.xmlrpc_port = int(environ['TXTRADER_XMLRPC_PORT'])
+        self.tcp_port = int(environ['TXTRADER_TCP_PORT'])
         self.label = 'TWS Gateway'
         self.channel = 'tws'
         self.current_account=''
@@ -430,9 +430,9 @@ class TWS():
     
     def connect(self):
         self.update_connection_status('Connecting')
-        api_hostname = environ['tws-api-hostname']
-        api_port = int(environ['tws-api-port'])
-        api_client_id = int(environ['tws-api-client-id'])
+        api_hostname = environ['TXTRADER_API_HOST']
+        api_port = int(environ['TXTRADER_API_PORT'])
+        api_client_id = int(environ['TXTRADER_API_CLIENT_ID'])
         self.output('Connnecting to TWS API at %s:%d with client id %d' % (api_hostname, api_port, api_client_id))
         self.tws_conn = Connection.create(host=api_hostname, port=api_port, clientId=api_client_id)
         self.tws_conn.registerAll(self.reply_handler)

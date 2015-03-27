@@ -209,10 +209,10 @@ class CQG_Callback():
 class CQG_Catcher():
     def __init__(self):
         self.label = 'CQG Gateway'
-        self.username = environ['cqg-xmlrpc-username']
-        self.password = environ['cqg-xmlrpc-password']
-        self.xmlrpc_port = int(environ['cqg-xmlrpc-port'])
-        self.tcp_port = int(environ['cqg-tcp-port'])
+        self.username = environ['TXTRADER_USERNAME']
+        self.password = environ['TXTRADER_PASSWORD']
+        self.xmlrpc_port = int(environ['TXTRADER_XMLRPC_PORT'])
+        self.tcp_port = int(environ['TXTRADER_TCP_PORT'])
         self.channel = 'cqg'
         self.clients=set([])
         self.bardata_callbacks=[]

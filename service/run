@@ -1,3 +1,4 @@
 #!/bin/sh
 exec 2>&1
-exec envdir ./env setuidgid ubuntu twistd --nodaemon --logfile=- --pidfile=txtrader.pid --python=./txtrader.tac
+USER=`cat ./env/TXTRADER_DAEMON_USER`
+exec envdir ./env setuidgid $USER twistd --nodaemon --logfile=- --pidfile= --python=./txtrader.tac

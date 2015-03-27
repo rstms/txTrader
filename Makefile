@@ -12,21 +12,25 @@ build:
 	@echo "Nothing to do"
 
 config:
-	@echo "Configure"
+	@echo -n "Enter daemon user:";\
+        read _user;\
+        echo $$_user>service/env/TXTRADER_DAEMON_USER
 	pip install egenix-mx-base
+
 
 install:
 	python bumpbuild.py
 	python setup.py install
 	cp bin/txtrader /usr/local/bin
-	ln -s $$PWD/service /etc/service/txtrader
-	svc -u /etc/service/txtrader/log
-	svc -u /etc/service/txtrader
+	mkdir -p /var/svc.d/txtrader
+	cp -r service/* /var/svc.d/txtrader
+	update-service --add /var/svc.d/txtrader
 
 uninstall:
-	svc -d /etc/service/txtrader/log
 	svc -d /etc/service/txtrader
-	rm -f /etc/service/txtrader
+	svc -d /etc/service/txtrader/log
+	update-service --remove /var/svc.d/txtrader
+	rm -rf /var/svc.d/txtrader
 	cat files.txt | xargs rm -f
 	rm -f /usr/local/bin/txtrader
 

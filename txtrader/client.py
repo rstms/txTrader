@@ -42,11 +42,11 @@ class TimeoutTransport(xmlrpclib.Transport):
 class API():
   def __init__(self, server):
     self.server=server
-    self.hostname = environ['%s-hostname' % server]
-    username = environ['%s-xmlrpc-username' % server]
-    password = environ['%s-xmlrpc-password' % server]
-    self.port = environ['%s-xmlrpc-port' % server]
-    self.account = environ['%s-account' % server]
+    self.hostname = environ['TXTRADER_HOST']
+    username = environ['TXTRADER_USERNAME']
+    password = environ['TXTRADER_PASSWORD']
+    self.port = environ['TXTRADER_XMLRPC_PORT']
+    self.account = environ['TXTRADER_API_ACCOUNT']
     url='http://%s:%s@%s:%s' % (username, password, self.hostname, self.port)
     self.transport = TimeoutTransport(timeout=XMLRPC_TIMEOUT)
     self.proxy = xmlrpclib.ServerProxy(url, transport=self.transport, verbose=False, allow_none=True)
