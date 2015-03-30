@@ -1,2 +1,2 @@
 #!/bin/sh
-exec envdir $TXTRADER_ENV python -m txtrader.client $*
+exec envdir /etc/txtrader python -m txtrader.client $*

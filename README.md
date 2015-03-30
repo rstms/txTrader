@@ -22,9 +22,14 @@ The service runs in its own directory under `/etc/service/`.
 
 The service directory contains startup files:  `run`, `txtrader.tac`.
 
-Configuration data are read from environment variables, set up using envdir from `/etc/service/<service_name>/env`.
+Configuration data are read from environment variables, set up using envdir from `/etc/txtrader`.
 
 Runtime information and errors append to log files: `/var/log/<service_name>/current`.
+
+
+Security 
+--------
+Set up a group account named `txtrader`.  The configuration files are owned by root and readable by this group.  Group membership enables interaction with the configured API.
 
 
 Prerequisites
