@@ -18,7 +18,7 @@ import traceback
 from sys import stderr
 from os import environ
 
-XMLRPC_TIMEOUT=15
+XMLRPC_TIMEOUT=60
 
 class TimeoutHTTPConnection(httplib.HTTPConnection):
     def connect(self):

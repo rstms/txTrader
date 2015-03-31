@@ -140,6 +140,7 @@ class TWS():
         self.password = environ['TXTRADER_PASSWORD']
         self.xmlrpc_port = int(environ['TXTRADER_XMLRPC_PORT'])
         self.tcp_port = int(environ['TXTRADER_TCP_PORT'])
+        self.enable_ticker = bool(int(environ['TXTRADER_ENABLE_TICKER']))
         self.label = 'TWS Gateway'
         self.channel = 'tws'
         self.current_account=''
@@ -507,38 +508,45 @@ class TWS():
             return True     
           
     def handle_tick_size(self, msg):
-        self.output('%s %d %s %d' % (repr(msg), msg.field, TickType().getField(msg.field), msg.size))
+        if self.enable_ticker:
+          self.output('%s %d %s %d' % (repr(msg), msg.field, TickType().getField(msg.field), msg.size))
         symbol = self.symbols_by_id[msg.tickerId]
         if msg.field==0: # bid_size
             symbol.bid_size=msg.size
-            symbol.update_quote()
+            if self.enable_ticker:
+                symbol.update_quote()
         elif msg.field==3: # ask_size
             symbol.ask_size=msg.size
-            symbol.update_quote()
+            if self.enable_ticker:
+                symbol.update_quote()
         elif msg.field==5: # last_size
             symbol.size=msg.size
         elif msg.field==8: # volume
             symbol.volume=msg.size
-            symbol.update_trade()
+            if self.enable_ticker:
+                symbol.update_trade()
 
     def handle_tick_price(self, msg):
-        self.output('%s %d %s %s' % (repr(msg), msg.field, TickType().getField(msg.field), msg.price))
         for cb in self.addsymbol_callbacks:
             if str(cb.id.ticker_id) == str(msg.tickerId):
                 cb.complete(True)
+        if self.enable_ticker:
+            self.output('%s %d %s %s' % (repr(msg), msg.field, TickType().getField(msg.field), msg.price))
         symbol = self.symbols_by_id[msg.tickerId]
         if msg.field==1: # bid
             symbol.bid=msg.price
-            symbol.update_quote()
+            if self.enable_ticker:
+                symbol.update_quote()
         elif msg.field==2: # ask
             symbol.ask=msg.price
-            symbol.update_quote()
+            if self.enable_ticker:
+                symbol.update_quote()
         elif msg.field==4: # last
             symbol.last=msg.price
               
     def handle_tick_string(self, msg):
-        #self.output('%s %d %s %s' % (repr(msg), msg.tickType, TickType().getField(msg.tickType), msg.value))
-        self.output('unhandled tick_string %s=%s' % (TickType().getField(msg.tickType), msg.value))
+        if self.enable_ticker:
+            self.output('%s %d %s %s' % (repr(msg), msg.tickType, TickType().getField(msg.tickType), msg.value))
         
     def handle_next_valid_id(self, msg):
         self.next_order_id = msg.orderId
