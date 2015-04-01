@@ -149,6 +149,7 @@ class TWS():
         self.pending_orders={}
         self.openorder_callbacks=[]
         self.accounts=[]
+        self.account_data={}
         self.positions={}
         self.position_callbacks=[]
         self.executions={}
@@ -157,6 +158,7 @@ class TWS():
         self.cancel_callbacks=[]
         self.order_callbacks=[]
         self.addsymbol_callbacks=[]
+        self.accountdata_callbacks=[]
         self.last_connection_status=''
         self.connection_status='Initializing'
         self.LastError=-1
@@ -178,6 +180,8 @@ class TWS():
           'position': self.handle_position,
           'positionEnd': self.handle_position_end,
           'historicalData': self.handle_historical_data,
+          'updateAccountValue': self.handle_account_value,
+          'accountDownloadEnd': self.handle_account_download_end,
         }
         self.ticker_ids={}
         self.symbols={}
@@ -212,7 +216,7 @@ class TWS():
               
     def CheckPendingResults(self):
         # check each callback list for timeouts
-        for cblist in [self.position_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.addsymbol_callbacks]:
+        for cblist in [self.position_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.addsymbol_callbacks, self.accountdata_callbacks]:
             dlist=[]
             for cb in cblist:
                 cb.check_expire()
@@ -608,6 +612,30 @@ class TWS():
             id=self.next_id()
             self.tws_conn.reqExecutions(id, filter)
         self.execution_callbacks.append(TWS_Callback(self, 0, 'executions', callback))
+
+    def request_account_data(self, account, callback):
+        if not self.accountdata_callbacks:
+            self.account_data[account]={}
+            self.tws_conn.reqAccountUpdates(False, account)
+            self.tws_conn.reqAccountUpdates(True, account)
+        self.accountdata_callbacks.append(TWS_Callback(self, account, 'account_data', callback))
+
+    def handle_account_value(self, msg):
+        self.output('%s %s %s %s %s' % (repr(msg), msg.key, msg.value, msg.currency, msg.accountName))
+        if not msg.accountName in self.account_data.keys():
+          self.account_data[msg.accountName]={}
+        self.account_data[msg.accountName][msg.key]=(msg.value, msg.currency)
+
+    def handle_account_download_end(self, msg):
+        self.output('%s %s' % (repr(msg), msg.accountName))
+        dcb=[]
+        for cb in self.accountdata_callbacks:
+            if cb.id == msg.accountName:
+                cb.complete(self.account_data[msg.accountName])
+                dcb.append(cb)
+                self.tws_conn.reqAccountUpdates(False, msg.accountName)
+        for cb in dcb:
+           del self.accountdata_callbacks[self.accountdata_callbacks.index(cb)]
         
     def handle_exec_details(self, msg):
         self.output('%s %s %s %s %s' % (repr(msg), msg.execution.m_side, msg.contract.m_symbol, msg.execution.m_cumQty, msg.execution.m_price))

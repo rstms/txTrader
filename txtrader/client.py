@@ -63,8 +63,9 @@ class API():
       'del_symbol': (self.del_symbol, ('symbol',)),
       'query_symbol': (self.query_symbol, ('symbol',)),
       'query_symbols': (self.query_symbols, ()),
-      'query_accounts': (self.query_accounts, ()),
       'set_account': (self.set_account, ('account',)),
+      'query_accounts': (self.query_accounts, ()),
+      'query_account': (self.query_account, ('account',)),
       'query_positions': (self.query_positions, ()),
       'query_orders': (self.query_orders, ()),
       'query_order': (self.query_order, ('order_id',)),
@@ -153,6 +154,13 @@ class API():
   def query_accounts(self, *args):
     try:
       return self.proxy.query_accounts()
+    except Exception, ex:
+      self.process_error(ex)
+
+  def query_account(self, *args):
+    account = args[0]
+    try:
+      return(self.proxy.query_account(account))
     except Exception, ex:
       self.process_error(ex)
 

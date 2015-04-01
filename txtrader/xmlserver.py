@@ -101,11 +101,21 @@ class authorized_xmlserver(XMLRPC):
     def xmlrpc_set_account(self, account):
         """set_account('account')
 
-        Select current active trading account
+        Select current active trading account.
         """
         self.output('xmlrpc_set_account(%s)' % account)
         ret = defer.Deferred()
         self.api.set_account(account, ret.callback)
+        return ret
+
+    def xmlrpc_query_account(self, account):
+        """query_account(account) => {'key': (value, currency), ...}
+
+        Query account data for account.
+        """
+        self.output('xmlrpc_query_account(%s)' % account)
+        ret = defer.Deferred()
+        self.api.request_account_data(account, ret.callback)
         return ret
       
     def xmlrpc_query_positions(self):
@@ -235,7 +245,10 @@ class authorized_xmlserver(XMLRPC):
         self.api.gateway_logoff()
 
     def xmlrpc_set_primary_exchange(self, symbol, exchange):
-        """Set primary exchange for symbol (default is SMART), delete mapping if exchange is None."""
+        """set_primary_exchange(symbol, exchange)
+
+        Set primary exchange for symbol (default is SMART), delete mapping if exchange is None.
+        """
         return self.api.set_primary_exchange(symbol, exchange)
 
 
