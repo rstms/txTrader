@@ -18,8 +18,6 @@ import traceback
 from sys import stderr
 from os import environ
 
-XMLRPC_TIMEOUT=60
-
 class TimeoutHTTPConnection(httplib.HTTPConnection):
     def connect(self):
         httplib.HTTPConnection.connect(self)
@@ -47,8 +45,10 @@ class API():
     password = environ['TXTRADER_PASSWORD']
     self.port = environ['TXTRADER_XMLRPC_PORT']
     self.account = environ['TXTRADER_API_ACCOUNT']
+    self.retry_limit = int(environ['TXTRADER_XMLRPC_RETRY_LIMIT'])
+    self.timeout = float(environ['TXTRADER_XMLRPC_TIMEOUT'])
     url='http://%s:%s@%s:%s' % (username, password, self.hostname, self.port)
-    self.transport = TimeoutTransport(timeout=XMLRPC_TIMEOUT)
+    self.transport = TimeoutTransport(timeout=self.timeout)
     self.proxy = xmlrpclib.ServerProxy(url, transport=self.transport, verbose=False, allow_none=True)
     if not self.set_account(self.account):
       raise Exception('Error: account mismatch')
@@ -99,113 +99,73 @@ class API():
       ret += '%s\n' % self.proxy.system.methodHelp(method)
     return ret
 
-  def status(self, *args):
-    try:
-      return(self.proxy.status())
-    except Exception, ex:
-      self.process_error(ex)
-
-  def shutdown(self, *args):
-    try: 
-      return self.proxy.shutdown()
-    except Exception, ex:
-      self.process_error(ex)
- 
-  def uptime(self, *args):
-    try:
-      return self.proxy.uptime()
-    except Exception, ex:
-      self.process_error(ex)
-
-  def query_bars(self, *args):
-    symbol, interval, start_time, end_time = args
-    try:
-      return self.proxy.query_bars(symbol, interval, start_time, end_time)
-    except Exception, ex:
-      self.process_error(ex)
-
-  def add_symbol(self, *args):
-    symbol = args[0]
-    try:
-      return self.proxy.add_symbol(symbol)
-    except Exception, ex:
-      self.process_error(ex)
-
-  def del_symbol(self, *args):
-    symbol = args[0]
-    try:
-      return self.proxy.del_symbol(symbol)
-    except Exception, ex:
-      self.process_error(ex)
-
-  def query_symbols(self, *args):
-    try:
-      return self.proxy.query_symbols()
-    except Exception, ex:
-      self.process_error(ex)
-
-  def query_symbol(self, *args):
-    symbol = args[0]
-    try:
-      return self.proxy.query_symbol(symbol)
-    except Exception, ex:
-      self.process_error(ex)
- 
-  def query_accounts(self, *args):
-    try:
-      return self.proxy.query_accounts()
-    except Exception, ex:
-      self.process_error(ex)
-
-  def query_account(self, *args):
-    account = args[0]
-    try:
-      return(self.proxy.query_account(account))
-    except Exception, ex:
-      self.process_error(ex)
-
-  def set_account(self, *args):
-    account=args[0]
-    try:
-      return(self.proxy.set_account(account))
-    except Exception, ex:
-      self.process_error(ex)
+  def call_with_retry(self, function_name, args):
+    tries=0
+    while True:
+      try:
+        tries+=1
+	ret = getattr(self.proxy, function_name)(*args)
+      except socket.timeout, ex:
+        if tries < self.retry_limit:
+          stderr.write('Exception: API(%s)@%s:%s %s (will retry)\n' % (self.server, self.hostname, self.port, repr(ex)))
+        else:
+          self.process_error(ex)
+      except Exception, ex:
+          self.process_error(ex)
+      else:
+        return ret
 
   def process_error(self, ex):
     stderr.write('Error: API(%s)@%s:%s call failed: %s\n' % (self.server, self.hostname, self.port, traceback.format_exc()))
     raise ex
 
+  def status(self, *args):
+    return self.call_with_retry('status', args)
+
+  def shutdown(self, *args):
+    return self.call_with_retry('shutdown', args)
+ 
+  def uptime(self, *args):
+    return self.call_with_retry('uptime', args)
+
+  def query_bars(self, *args):
+    return self.call_with_retry('query_bars', args)
+
+  def add_symbol(self, *args):
+    return self.call_with_retry('add_symbol', args)
+
+  def del_symbol(self, *args):
+    return self.call_with_retry('del_symbol', args)
+
+  def query_symbols(self, *args):
+    return self.call_with_retry('query_symbols', args)
+
+  def query_symbol(self, *args):
+    return self.call_with_retry('query_symbol', args)
+
+  def query_accounts(self, *args):
+    return self.call_with_retry('query_accounts', args)
+
+  def query_account(self, *args):
+    return self.call_with_retry('query_account', args)
+
+  def set_account(self, *args):
+    return self.call_with_retry('set_account', args)
+
   def query_positions(self, *args):
-    try:
-      return self.proxy.query_positions()
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('query_positions', args)
 
   def query_orders(self, *args):
-    try:
-      return self.proxy.query_orders()
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('query_orders', args)
 
   def query_order(self, *args):
-    order_id=args[0]
-    try:
-      return self.proxy.query_order(order_id)
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('query_order', args)
 
   def cancel_order(self, *args):
-    order_id=args[0]
-    try:
-      return self.proxy.cancel_order(order_id)
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('cancel_order', args)
 
   def query_executions(self, *args):
-    try:
-      return self.proxy.query_executions()
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('query_executions', args)
 
   def market_order(self, *args):
     symbol, quantity = args[0:2]
@@ -236,30 +196,16 @@ class API():
       self.process_error(ex)
 
   def global_cancel(self, *args):
-    try:
-      return self.proxy.global_cancel()
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('global_cancel', args)
 
   def gateway_logon(self, *args):
-    username, password = args
-    try:
-      return self.proxy.gateway_logon(username, password)
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('gateway_logon', args)
 
   def gateway_logoff(self):
-    try:
-      return self.proxy.gateway_logoff()
-    except Exception, ex:
-      self.process_error(ex)
-
+    return self.call_with_retry('gateway_logoff', args)
 
   def set_primary_exchange(self, symbol, exchange):
-    try:
-      return self.proxy.set_primary_exchange(symbol, exchange)
-    except Exception, ex:
-      self.process_error(ex)
+    return self.call_with_retry('set_primary_exchange', args)
 
 if __name__=='__main__':
   from sys import argv
