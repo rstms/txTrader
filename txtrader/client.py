@@ -201,10 +201,10 @@ class API():
   def gateway_logon(self, *args):
     return self.call_with_retry('gateway_logon', args)
 
-  def gateway_logoff(self):
+  def gateway_logoff(self, *args):
     return self.call_with_retry('gateway_logoff', args)
 
-  def set_primary_exchange(self, symbol, exchange):
+  def set_primary_exchange(self, *args):
     return self.call_with_retry('set_primary_exchange', args)
 
 if __name__=='__main__':
