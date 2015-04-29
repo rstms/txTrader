@@ -13,8 +13,8 @@
 
 VERSION_MAJOR=0
 VERSION_MINOR=1
-BUILD=1120
-DATE='2015-04-01'
+BUILD=1124
+DATE='2015-04-28'
 __version__='%s.%s.%s' % (VERSION_MAJOR,VERSION_MINOR,BUILD)
 __date__=DATE
 __label__='TxTrader Securities Trading API Controller'

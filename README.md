@@ -32,10 +32,14 @@ Security
 The Makefile will set up a user and group account named `txtrader`.  The configuration files are owned by root and readable by this group.  Group membership controls interaction with the configured API.  To allow a user account to interact with txTrader, add the account to the txtrader group.
 
 
-Prerequisites
--------------
+Installation
+------------
 ```
 sudo aptitude install python-pip python-twisted-web python-egenix-mx-base-dev daemontools-run ucspi-tcp
+curl --location -o- https://github.com/rstms/txTrader/tarball/master | tar zxfv -
+cd rstms-txTrader-*
+sudo make configure
+sudo make install
 ```
 
 XMLRPC Server
