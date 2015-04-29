@@ -2,6 +2,8 @@
 
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
+REQUIRED_PACKAGES = python-twisted-web python-egenix-mx-base-dev daemontools-run ucspi-tcp
+
 default: 
 	@echo "Nothing to do"
 
@@ -19,7 +21,10 @@ config:
 	@echo "Configuring..."
 	getent >/dev/null passwd txtrader && echo "User txtrader exists." || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader;\
         echo txtrader>etc/txtrader/TXTRADER_DAEMON_USER
-	pip install egenix-mx-base
+	for package in $(REQUIRED_PACKAGES); do \
+	  dpkg-query -l i$$package || (echo "missing required package $$package"; exit); \
+	done;
+
 
 install:
 	@echo "Installing..."
