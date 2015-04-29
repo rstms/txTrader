@@ -35,11 +35,7 @@ The Makefile will set up a user and group account named `txtrader`.  The configu
 Installation
 ------------
 ```
-sudo aptitude install python-pip python-twisted-web python-egenix-mx-base-dev daemontools-run ucspi-tcp
-curl --location -o- https://github.com/rstms/txTrader/tarball/master | tar zxfv -
-cd rstms-txTrader-*
-sudo make configure
-sudo make install
+curl --location https://github.com/rstms/TxTrader/raw/master/bootstrap.sh | sudo sh
 ```
 
 XMLRPC Server
