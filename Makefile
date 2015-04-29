@@ -21,10 +21,9 @@ config:
 	@echo "Configuring..."
 	getent >/dev/null passwd txtrader && echo "User txtrader exists." || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader;\
         echo txtrader>etc/txtrader/TXTRADER_DAEMON_USER
-	for package in $(REQUIRED_PACKAGES); do \
-	  dpkg-query -l i$$package || (echo "missing required package $$package"; exit); \
+	@for package in $(REQUIRED_PACKAGES); do \
+	  dpkg-query >/dev/null -l $$package && echo "verified package $$package" || break;\
 	done;
-
 
 install:
 	@echo "Installing..."
