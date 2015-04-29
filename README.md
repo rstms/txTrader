@@ -29,13 +29,13 @@ Runtime information and errors append to log files: `/var/log/<service_name>/cur
 
 Security 
 --------
-Set up a group account named `txtrader`.  The configuration files are owned by root and readable by this group.  Group membership enables interaction with the configured API.
+The Makefile will set up a user and group account named `txtrader`.  The configuration files are owned by root and readable by this group.  Group membership controls interaction with the configured API.  To allow a user account to interact with txTrader, add the account to the txtrader group.
 
 
 Prerequisites
 -------------
 ```
-sudo aptitude install python-twisted-web python-egenix-mx-base-dev daemontools-run ucspi-tcp
+sudo aptitude install python-pip python-twisted-web python-egenix-mx-base-dev daemontools-run ucspi-tcp
 ```
 
 XMLRPC Server

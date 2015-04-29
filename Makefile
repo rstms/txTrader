@@ -12,10 +12,8 @@ build:
 	@echo "Nothing to do"
 
 config:
-	@echo -n "Enter daemon user:";\
-        read _user;\
-	getent >/dev/null passwd $$_user && echo "user $$_user exists" || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login $$_user;\
-        echo $$_user>etc/txtrader/TXTRADER_DAEMON_USER
+	getent >/dev/null passwd txtrader && echo "User txtrader exists." || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader;\
+        echo txtrader>etc/txtrader/TXTRADER_DAEMON_USER
 	pip install egenix-mx-base
 
 
