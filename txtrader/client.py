@@ -50,7 +50,6 @@ class API():
     url='http://%s:%s@%s:%s' % (username, password, self.hostname, self.port)
     self.transport = TimeoutTransport(timeout=self.timeout)
     self.proxy = xmlrpclib.ServerProxy(url, transport=self.transport, verbose=False, allow_none=True)
-    self.account_set = False
 
     self.cmdmap={
       'help': (self.help, False, ()),
@@ -83,8 +82,9 @@ class API():
   def cmd(self, cmd, args):
     if cmd in self.cmdmap.keys():
       func, require_account, parms = self.cmdmap[cmd]
-      if require_account and not self.account_set:
-      	raise Exception('Error: set_account required')
+      if require_account:
+	if not self.set_account(self.account):
+      	  raise Exception('Error: set_account required')
       return func(*args)
     else:
       return 'API Client commands:\n  %s' % '\n  '.join([k+repr(v[1]) for k,v in self.cmdmap.iteritems()])
@@ -101,6 +101,10 @@ class API():
     return ret
 
   def call_with_retry(self, function_name, args):
+    require_account = self.cmdmap[function_name][1]
+    if require_account:
+      if not self.set_account(self.account):
+        raise Exception('Error: set_account required')
     tries=0
     while True:
       try:
@@ -151,9 +155,11 @@ class API():
     return self.call_with_retry('query_account', args)
 
   def set_account(self, *args):
-    self.account_set = self.call_with_retry('set_account', args)
-    return self.account_set
-
+    account = args[0]
+    ret = self.call_with_retry('set_account', args)
+    if ret: 
+      self.account = account
+    return ret
 
   def query_positions(self, *args):
     return self.call_with_retry('query_positions', args)

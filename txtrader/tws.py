@@ -322,6 +322,8 @@ class TWS():
         self.WriteAllClients('current-account: %s' % self.current_account)
         if callback:
             TWS_Callback(self, 0, 'current-account', callback).complete(ret)
+        else:
+           return ret
 
     def EverySecond(self):
         if self.tws_conn:

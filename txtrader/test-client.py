@@ -19,6 +19,8 @@ def test_add_symbol():
   #assert not gw.add_symbol('fnord')
 
   gw=API('tws')
+  accounts=gw.query_accounts()
+  assert gw.set_account(accounts[0])
   assert gw.add_symbol('TSLA')
   assert not gw.add_symbol('fnord')
 
