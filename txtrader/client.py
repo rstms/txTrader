@@ -50,40 +50,40 @@ class API():
     url='http://%s:%s@%s:%s' % (username, password, self.hostname, self.port)
     self.transport = TimeoutTransport(timeout=self.timeout)
     self.proxy = xmlrpclib.ServerProxy(url, transport=self.transport, verbose=False, allow_none=True)
-    if not self.set_account(self.account):
-      raise Exception('Error: account mismatch')
 
     self.cmdmap={
-      'help': (self.help, ()),
-      'status': (self.status, ()),
-      'shutdown': (self.shutdown, ()),
-      'uptime': (self.uptime, ()),
-      'query_bars': (self.query_bars, ('symbol', 'interval', 'start_time', 'end_time')),
-      'add_symbol': (self.add_symbol, ('symbol',)),
-      'del_symbol': (self.del_symbol, ('symbol',)),
-      'query_symbol': (self.query_symbol, ('symbol',)),
-      'query_symbols': (self.query_symbols, ()),
-      'set_account': (self.set_account, ('account',)),
-      'query_accounts': (self.query_accounts, ()),
-      'query_account': (self.query_account, ('account',)),
-      'query_positions': (self.query_positions, ()),
-      'query_orders': (self.query_orders, ()),
-      'query_order': (self.query_order, ('order_id',)),
-      'cancel_order': (self.cancel_order, ('order_id',)),
-      'query_executions': (self.query_executions, ()),
-      'market_order': (self.market_order, ('symbol', 'quantity')),
-      'limit_order': (self.limit_order, ('symbol', 'limit_price', 'quantity')),
-      'stop_order': (self.stop_order, ('symbol', 'stop_price', 'quantity')),
-      'stoplimit_order': (self.stoplimit_order, ('symbol', 'stop_price', 'limit_price', 'quantity')),
-      'global_cancel': (self.global_cancel, ()),
-      'gateway_logon': (self.gateway_logon, ('username', 'password')),
-      'gateway_logoff': (self.gateway_logoff, ()),
-      'set_primary_exchange': (self.set_primary_exchange, ('symbol', 'exchange'))
+      'help': (self.help, False, ()),
+      'status': (self.status, False, ()),
+      'shutdown': (self.shutdown, False, ()),
+      'uptime': (self.uptime, False, ()),
+      'query_bars': (self.query_bars, True, ('symbol', 'interval', 'start_time', 'end_time')),
+      'add_symbol': (self.add_symbol, True, ('symbol',)),
+      'del_symbol': (self.del_symbol, True, ('symbol',)),
+      'query_symbol': (self.query_symbol, True, ('symbol',)),
+      'query_symbols': (self.query_symbols, True, ()),
+      'set_account': (self.set_account, False, ('account',)),
+      'query_accounts': (self.query_accounts, False, ()),
+      'query_account': (self.query_account, True, ('account',)),
+      'query_positions': (self.query_positions, True, ()),
+      'query_orders': (self.query_orders, True, ()),
+      'query_order': (self.query_order, True, ('order_id',)),
+      'cancel_order': (self.cancel_order, True, ('order_id',)),
+      'query_executions': (self.query_executions, True, ()),
+      'market_order': (self.market_order, True, ('symbol', 'quantity')),
+      'limit_order': (self.limit_order, True, ('symbol', 'limit_price', 'quantity')),
+      'stop_order': (self.stop_order, True, ('symbol', 'stop_price', 'quantity')),
+      'stoplimit_order': (self.stoplimit_order, True, ('symbol', 'stop_price', 'limit_price', 'quantity')),
+      'global_cancel': (self.global_cancel, True, ()),
+      'gateway_logon': (self.gateway_logon, True, ('username', 'password')),
+      'gateway_logoff': (self.gateway_logoff, True, ()),
+      'set_primary_exchange': (self.set_primary_exchange, True, ('symbol', 'exchange'))
     }
 
   def cmd(self, cmd, args):
     if cmd in self.cmdmap.keys():
-      func, parms = self.cmdmap[cmd]
+      func, require_account, parms = self.cmdmap[cmd]
+      if require_account and not self.server.current_account:
+      	raise Exception('Error: set_account required')
       return func(*args)
     else:
       return 'API Client commands:\n  %s' % '\n  '.join([k+repr(v[1]) for k,v in self.cmdmap.iteritems()])
