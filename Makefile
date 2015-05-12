@@ -38,7 +38,7 @@ install:
 
 start:
 	@echo "Starting Service..."
-	rm /etc/service/txtrader/down
+	rm -f /etc/service/txtrader/down
 	svc -u /etc/service/txtrader
 
 stop:
