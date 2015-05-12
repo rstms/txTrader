@@ -33,8 +33,19 @@ install:
 	chgrp -R txtrader /etc/txtrader
 	mkdir -p /var/svc.d/txtrader
 	cp -r service/* /var/svc.d/txtrader
+	touch /var/svc.d/txtrader/down
 	update-service --add /var/svc.d/txtrader
 
+start:
+	@echo "Starting Service..."
+	rm /etc/service/txtrader/down
+	svc -u /etc/service/txtrader
+
+stop:
+	@echo "Stopping Service..."
+	touch /etc/service/txtrader/down
+	svc -d /etc/service/txtrader
+		
 uninstall:
 	@echo "Uninstalling..."
 	svc -d /etc/service/txtrader
