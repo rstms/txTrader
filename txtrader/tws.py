@@ -589,8 +589,10 @@ class TWS():
     def handle_position(self, msg):
         if not msg.account in self.positions.keys():
             self.positions[msg.account] = {}
-        pos = self.positions[msg.account]
-        pos[msg.contract.m_symbol] = msg.pos  
+        # only returh STOCK positions
+        if msg.contract.m_secType == 'STK':
+          pos = self.positions[msg.account]
+          pos[msg.contract.m_symbol] = msg.pos  
         
     def handle_position_end(self, msg):
         for cb in self.position_callbacks:

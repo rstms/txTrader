@@ -87,7 +87,7 @@ class API():
       	  raise Exception('Error: set_account required')
       return func(*args)
     else:
-      return 'API Client commands:\n  %s' % '\n  '.join([k+repr(v[1]) for k,v in self.cmdmap.iteritems()])
+      return 'API Client commands:\n  %s' % '\n  '.join([k+repr(v[2]) for k,v in self.cmdmap.iteritems()])
 
   def help(self, *args):
     ret=''
