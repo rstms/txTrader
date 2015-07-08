@@ -19,7 +19,7 @@ import time
 
 from os import environ
 
-QUERY_TIMEOUT_SECONDS = 3
+DEFAULT_TWS_CALLBACK_TIMEOUT = 3
 
 SHUTDOWN_ON_TWS_DISCONNECT = True
 
@@ -104,11 +104,13 @@ class TWS_Symbol():
         self.tws.WriteAllClients('trade.%s:%s %d %d' % (self.symbol, self.last, self.size, self.volume))
         
 class TWS_Callback():
-    def __init__(self, tws, id, label, callable, timeout=QUERY_TIMEOUT_SECONDS):
+    def __init__(self, tws, id, label, callable, timeout=0):
         """type is stored and used to index dict of return results on callback"""
         self.tws=tws
         self.id=id
         self.label=label
+        if not timeout:
+          timeout = tws.callback_timeout
         self.expire=int(mx.DateTime.now())+timeout
         self.callable=callable
         self.done=False
@@ -135,11 +137,15 @@ class TWS_Callback():
 class TWS():
 
     def __init__(self):
-        #self.output('TWS init')
+        self.output('TWS init')
         self.username = environ['TXTRADER_USERNAME']
         self.password = environ['TXTRADER_PASSWORD']
         self.xmlrpc_port = int(environ['TXTRADER_XMLRPC_PORT'])
         self.tcp_port = int(environ['TXTRADER_TCP_PORT'])
+        self.callback_timeout = int(environ['TXTRADER_TWS_CALLBACK_TIMEOUT'])
+        if not self.callback_timeout:
+          self.callback_timeout = DEFAULT_TWS_CALLBACK_TIMEOUT
+        self.output('callback_timeout=%d' % self.callback_timeout)
         self.enable_ticker = bool(int(environ['TXTRADER_ENABLE_TICKER']))
         self.label = 'TWS Gateway'
         self.channel = 'tws'
