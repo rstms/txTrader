@@ -12,22 +12,24 @@
 """
 
 
-from twisted.internet import reactor, protocol
+import time
+from twisted.internet import reactor, protocol, task
 
 class Monitor():
   def __init__(self, host='localhost', port=50090, user=None, password=None, callbacks=None):
     """Initialize Monitor:
       connection parameters: host, port, user, password, 
       callbacks: {'name':function ...}  
-        where name is one of ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade']
+        where name is one of ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick']
         and function(data) is the callback that will receive event data
+        callbacks must return True to continue monitor.run() loop
     """
     self.host = host
     self.port = port
     self.user = user
     self.password = password
     self.channel = ''
-    self.callback_types = ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade']
+    self.callback_types = ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick']
     self.flags = 'noquotes notrades'
 
     if callbacks:
@@ -44,6 +46,13 @@ class Monitor():
   def set_callback(self, cb_type, cb_func):
     """Set a callback function for a message type."""
     self.callbacks[cb_type] = cb_func
+   
+  def set_tick_interval(self, interval_seconds):
+    l = task.LoopingCall(self.ticker)
+    l.start(interval_seconds)
+     
+  def ticker(self):
+    self._callback('tick', time.time())
 
   def delete_callback(self, cb_type):
     """Delete a callback function for a message type."""
@@ -52,16 +61,17 @@ class Monitor():
 
   def _callback(self, cb_type, cb_data):
     if cb_type in self.callbacks.keys():
-      self.callbacks[cb_type](cb_type, cb_data)
+      if not self.callbacks[cb_type](cb_type, cb_data):
+        reactor.callFromThread(reactor.stop)
 
   def _cb_print(self, label, msg):
     print('%s: %s' % (label, repr(msg)))
+    return True
 
   def run(self):
     """React to gateway events, returning data via callback functions."""
     self.listen(reactor)
     reactor.run()
-
 
 class StatusClient(protocol.Protocol):
 
