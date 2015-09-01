@@ -20,6 +20,7 @@ ifile.close()
 
 bflag=True
 dflag=True
+tflag=True
 
 olines=[]
 for line in ilines:
@@ -29,8 +30,12 @@ for line in ilines:
         bflag=False
     elif dflag and line.startswith('DATE'):
         now = datetime.datetime.now()
-        olines.append('DATE=\'%4d-%02d-%02d\'\n' % (now.year, now.month, now.day))
+        olines.append('DATE=\'%s\'\n' % now.strftime('%Y-%m-%d'))
         dflag = False
+    elif tflag and line.startswith('TIME'):
+        now = datetime.datetime.now()
+        olines.append('TIME=\'%s\'\n' % now.strftime('%H:%M:%S'))
+        tflag = False
     else:
         olines.append(line)
 
