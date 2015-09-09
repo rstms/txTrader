@@ -6,7 +6,7 @@ mv rstms-IbPy-* IbPy
 cd IbPy
 python setup.py install
 cd
-curl --location -o- https://github.com/rstms/txTrader/tarball/master | tar zxfv -
+curl --location -o- https://github.com/rstms/txTrader/tarball/v$TXTRADER_VERSION | tar zxfv -
 mv rstms-txTrader-* txTrader
 cd txTrader
 make config
