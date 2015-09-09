@@ -56,6 +56,7 @@ class TWS_Symbol():
         self.last=0.0
         self.size=0
         self.volume=0
+	self.close=0.0
         self.tws.symbols[symbol]=self
         self.last_quote = ''
         self.tws.symbols_by_id[self.ticker_id]=self
@@ -65,7 +66,7 @@ class TWS_Symbol():
         self.tws.tws_conn.reqMktData(self.ticker_id, contract, '', False)
         
     def __str__(self):
-        return 'TWS_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.clients)
+        return 'TWS_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.clients)
         
     def __repr__(self):
         return str(self)
@@ -80,6 +81,7 @@ class TWS_Symbol():
           'last': self.last,
           'size': self.size,
           'volume': self.volume,
+          'close': self.close,
           'fullname': self.symbol,
         }
       
@@ -555,6 +557,8 @@ class TWS():
                 symbol.update_quote()
         elif msg.field==4: # last
             symbol.last=msg.price
+        elif msg.field==9: # close
+            symbol.close=msg.price
               
     def handle_tick_string(self, msg):
         if self.enable_ticker:
@@ -595,7 +599,7 @@ class TWS():
     def handle_position(self, msg):
         if not msg.account in self.positions.keys():
             self.positions[msg.account] = {}
-        # only returh STOCK positions
+        # only return STOCK positions
         if msg.contract.m_secType == 'STK':
           pos = self.positions[msg.account]
           pos[msg.contract.m_symbol] = msg.pos  
