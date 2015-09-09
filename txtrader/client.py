@@ -54,6 +54,7 @@ class API():
     self.cmdmap={
       'help': (self.help, False, ()),
       'status': (self.status, False, ()),
+      'version': (self.version, False, ()),
       'shutdown': (self.shutdown, False, ()),
       'uptime': (self.uptime, False, ()),
       'query_bars': (self.query_bars, True, ('symbol', 'interval', 'start_time', 'end_time')),
@@ -126,6 +127,9 @@ class API():
 
   def status(self, *args):
     return self.call_with_retry('status', args)
+
+  def version(self, *args):
+    return self.call_with_retry('version', args)
 
   def shutdown(self, *args):
     return self.call_with_retry('shutdown', args)

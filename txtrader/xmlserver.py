@@ -17,6 +17,8 @@ from twisted.internet import reactor, defer
 from twisted.web import http
 from twisted.web.xmlrpc import XMLRPC
 
+import version
+
 class authorized_xmlserver(XMLRPC):
 
     def __init__(self, api):
@@ -49,6 +51,14 @@ class authorized_xmlserver(XMLRPC):
         self.output('xmlrpc_uptime()')
         uptime = mx.DateTime.now()-self.started
         return 'started %s (elapsed %s)' % (self.started.strftime('%Y-%m-%d %H:%M:%S'), uptime.strftime('%H:%M:%S'))
+      
+    def xmlrpc_version(self):
+        """version() => 'version string'
+
+        Return string containing release version of current server instance
+        """
+        self.output('xmlrpc_version()')
+        return version.__version__
       
     def xmlrpc_add_symbol(self, symbol):
         """add_symbol('symbol')
