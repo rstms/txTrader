@@ -382,10 +382,11 @@ class TWS():
             order['errorMsg']=msg.errorMsg
             self.send_order_status(order)
             
-        if msg.errorCode in [1100,1101,1300]:
+        if msg.errorCode in [1100, 1300]:
             self.update_connection_status('Disconnected')
-        elif msg.errorCode==2104:
+        elif msg.errorCode in [1101, 1102, 2104]:
             self.update_connection_status('Up')
+
         self.WriteAllClients('error: %s' % msg)
 
     def find_order_with_id(self, id):
