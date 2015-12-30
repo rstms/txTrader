@@ -10,4 +10,5 @@ curl --location -o- https://github.com/rstms/txTrader/tarball/$TXTRADER_VERSION 
 mv rstms-txTrader-* txTrader
 cd txTrader
 make config
+make dist
 make install
