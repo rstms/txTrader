@@ -1,14 +1,10 @@
 #!/bin/sh
-#aptitude -y update
-#aptitude -y install make python-twisted-web python-egenix-mx-base-dev python-egenix-mxdatetime daemontools-run ucspi-tcp
 curl --location https://github.com/rstms/IbPy/tarball/$IBPY_VERSION | tar zxfv -
 mv rstms-IbPy-* IbPy
 cd IbPy
-python setup.py install
+python setup.py sdist
 cd
 curl --location -o- https://github.com/rstms/txTrader/tarball/$TXTRADER_VERSION | tar zxfv -
 mv rstms-txTrader-* txTrader
 cd txTrader
-make config
-make dist
 make install

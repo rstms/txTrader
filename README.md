@@ -14,6 +14,26 @@ Common interface code is used to provide identical access to CQG and TWS.  Note 
 
 Status change events are available on the TCP/IP streaming service.  The data are JSON-formatted objects.
 
+
+Dependencies
+------------
+
+TxTrader's server daemons depend on external libraries for each configured API:
+
+ - Interactive Brokers
+   - IbPy python wrappers for IB's java/C++ API
+   - bootstrap script uses pinned fork at https://github.com/rstms/IbPy
+   - https://interactivebrokers.github.io
+
+ - CQG
+   - server runs under Windows
+   - uses win32com to access CQG's COM API
+   - http://partners.cqg.com/api-resources
+
+ - RealTick
+   - planned enhancement
+
+
 Server Configuration
 --------------------
 The `txtrader.tws` and/or `txtrader.cqg` servers run as a supervised process under daemontools

@@ -18,6 +18,8 @@ import traceback
 from sys import stderr
 from os import environ
 
+import version
+
 class TimeoutHTTPConnection(httplib.HTTPConnection):
     def connect(self):
         httplib.HTTPConnection.connect(self)
@@ -49,6 +51,7 @@ class API():
     self.timeout = float(environ['TXTRADER_XMLRPC_TIMEOUT'])
     url='http://%s:%s@%s:%s' % (username, password, self.hostname, self.port)
     self.transport = TimeoutTransport(timeout=self.timeout)
+    self.transport.user_agent = 'TxTrader/%s (by www.rtsms.net)' % version.__version__
     self.proxy = xmlrpclib.ServerProxy(url, transport=self.transport, verbose=False, allow_none=True)
 
     self.cmdmap={

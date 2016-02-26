@@ -18,6 +18,7 @@ from twisted.web import http
 from twisted.web.xmlrpc import XMLRPC
 
 import version
+from subprocess import check_output 
 
 class authorized_xmlserver(XMLRPC):
 
@@ -58,7 +59,11 @@ class authorized_xmlserver(XMLRPC):
         Return string containing release version of current server instance
         """
         self.output('xmlrpc_version()')
-        return version.__version__
+        ret = {}
+        ret['txtrader'] = version.__version__
+        ret['python'] = sys.version
+        ret['pip'] = check_output('pip list', shell=True)
+        return ret
       
     def xmlrpc_add_symbol(self, symbol):
         """add_symbol('symbol')

@@ -1,8 +1,18 @@
-# txTrader Makefile
+#txTrader Makefile
 
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
-REQUIRED_PACKAGES = python-twisted-web python-egenix-mx-base-dev daemontools-run ucspi-tcp
+REQUIRED_PACKAGES = daemontools-run ucspi-tcp
+REQUIRED_PIP = Twisted egenix-mx-base ./dist/*.tar.gz ~/IbPy/dist/*.tar.gz
+
+TXTRADER_PYTHON = /usr/local/lib/python2.7.11/bin/python
+TXTRADER_ENVDIR = /etc/txtrader
+TXTRADER_VENV = $(HOME)/txtrader-venv
+
+TXTRADER_TEST_HOST = 127.0.0.1
+TXTRADER_TEST_PORT = 17496
+# set account to AUTO for make testconfig to auto-set demo account
+TXTRADER_TEST_ACCOUNT = AUTO
 
 default: 
 	@echo "Nothing to do"
@@ -11,26 +21,49 @@ clean:
 	@echo "Cleaning up..."
 	rm -f txtrader/*.pyc
 	rm -rf build
+	rm -rf $(TXTRADER_VENV)
 
-rebuild:
+build:
 	@echo "Building..."
 	python bumpbuild.py
-	@$(MAKE) -f $(THIS_FILE) install
+	python setup.py sdist 
 
 config:
 	@echo "Configuring..."
-	getent >/dev/null passwd txtrader && echo "User txtrader exists." || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader;\
-        echo txtrader>etc/txtrader/TXTRADER_DAEMON_USER
+	@getent >/dev/null passwd txtrader && echo "User txtrader exists." || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader
+	@echo $(TXTRADER_VENV)>etc/txtrader/TXTRADER_VENV
+	@echo txtrader>etc/txtrader/TXTRADER_DAEMON_USER
 	@for package in $(REQUIRED_PACKAGES); do \
 	  dpkg-query >/dev/null -l $$package && echo "verified package $$package" || break;\
 	done;
 
-install:
+testconfig:
+	@echo "Configuring test API..."
+	$(MAKE) start
+	sudo sh -c "echo $(TXTRADER_TEST_HOST)>$(TXTRADER_ENVDIR)/TXTRADER_API_HOST"
+	sudo sh -c "echo $(TXTRADER_TEST_PORT)>$(TXTRADER_ENVDIR)/TXTRADER_API_PORT"
+	@echo -n "Restarting txTrader service..."
+	@sudo svc -t /etc/service/txtrader
+	@while ! (txtrader 2>/dev/null tws status); do echo -n .; done
+	@if [ "$(TXTRADER_TEST_ACCOUNT)" = "AUTO" ]; then\
+	  . $(TXTRADER_VENV)/bin/activate;\
+          export ACCOUNT="`envdir /etc/txtrader txtrader tws query_accounts | tr -d []\'`";\
+	else\
+	  export ACCOUNT="$(TXTRADER_TEST_ACCOUNT)";\
+	fi;\
+	sudo sh -c "echo $$ACCOUNT>$(TXTRADER_ENVDIR)/TXTRADER_API_ACCOUNT";\
+	echo "Set test ACCOUNT=$$ACCOUNT"
+
+install: uninstall config build
 	@echo "Installing..."
-	python setup.py install
+	virtualenv -p $(TXTRADER_PYTHON) $(TXTRADER_VENV)
+	. $(TXTRADER_VENV)/bin/activate; \
+	for package in $(REQUIRED_PIP); do \
+          echo -n "Installing package $$package into virtual env..."; pip install $$package || false;\
+        done;
 	cp bin/txtrader /usr/local/bin
-	cp -r etc/txtrader /etc/txtrader
-	chgrp -R txtrader /etc/txtrader
+	cp -r etc/txtrader $(TXTRADER_ENVDIR)
+	chgrp -R txtrader $(TXTRADER_ENVDIR)
 	mkdir -p /var/svc.d/txtrader
 	cp -r service/* /var/svc.d/txtrader
 	touch /var/svc.d/txtrader/down
@@ -38,26 +71,28 @@ install:
 
 start:
 	@echo "Starting Service..."
-	rm -f /etc/service/txtrader/down
-	svc -u /etc/service/txtrader
+	sudo rm -f /etc/service/txtrader/down
+	sudo svc -u /etc/service/txtrader
 
 stop:
 	@echo "Stopping Service..."
-	touch /etc/service/txtrader/down
-	svc -d /etc/service/txtrader
+	sudo touch /etc/service/txtrader/down
+	sudo svc -d /etc/service/txtrader
+
+restart: stop start
+	@echo "Restarting Service..."
 		
 uninstall:
 	@echo "Uninstalling..."
-	svc -d /etc/service/txtrader
-	svc -d /etc/service/txtrader/log
-	update-service --remove /var/svc.d/txtrader
+	if [ -e /etc/service/txtrader ]; then\
+	  svc -d /etc/service/txtrader;\
+	  svc -d /etc/service/txtrader/log;\
+	  update-service --remove /var/svc.d/txtrader;\
+	fi
 	rm -rf /var/svc.d/txtrader
-	rm -rf /etc/txtrader
+	rm -rf $(TXTRADER_ENVDIR)
 	cat files.txt | xargs rm -f
 	rm -f /usr/local/bin/txtrader
-
-dist:
-	python setup.py sdist
 
 TESTS := $(wildcard txtrader/test-*.py)
 

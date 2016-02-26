@@ -2,4 +2,7 @@
 exec 2>&1
 CFG=/etc/txtrader
 USER=`cat $CFG/TXTRADER_DAEMON_USER`
+VENV=`cat $CFG/TXTRADER_VENV`
+. $VENV/bin/activate
 exec envdir $CFG setuidgid $USER twistd --nodaemon --logfile=- --pidfile= --python=./txtrader.tac
+
