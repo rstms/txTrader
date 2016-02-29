@@ -123,8 +123,11 @@ class TWS_Callback():
         if not self.done:
             if self.callable.__name__=='write':
                 results='%s.%s: %s\n' % (self.tws.channel, self.label, json.dumps(results))
+            self.tws.output('callback: %s writing results to callable: %s' % (self, repr(results)))
             self.callable(results)
             self.done=True
+        else:
+            self.tws.output('callback: %s was already done!' % self)
             
     def check_expire(self):
         if not self.done:
@@ -158,6 +161,7 @@ class TWS():
         self.openorder_callbacks=[]
         self.accounts=[]
         self.account_data={}
+        self.pending_account_data_requests=set([])
         self.positions={}
         self.position_callbacks=[]
         self.executions={}
@@ -629,11 +633,22 @@ class TWS():
         self.execution_callbacks.append(TWS_Callback(self, 0, 'executions', callback))
 
     def request_account_data(self, account, callback):
-        if not self.accountdata_callbacks:
+        need_request = False
+        if account not in self.pending_account_data_requests:
             self.account_data[account]={}
+            need_request = True
+        
+        self.accountdata_callbacks.append(TWS_Callback(self, account, 'account_data', callback))
+
+        if need_request:
+            self.output('requesting account updates: %s' % account)
+            self.pending_account_data_requests.add(account)
             self.tws_conn.reqAccountUpdates(False, account)
             self.tws_conn.reqAccountUpdates(True, account)
-        self.accountdata_callbacks.append(TWS_Callback(self, account, 'account_data', callback))
+        else:
+            self.output('NOT requesting account updates: %s (one is already pending)' % account)
+
+        self.output('returning from request_acount_data')
 
     def handle_account_value(self, msg):
         self.output('%s %s %s %s %s' % (repr(msg), msg.key, msg.value, msg.currency, msg.accountName))
@@ -646,9 +661,13 @@ class TWS():
         dcb=[]
         for cb in self.accountdata_callbacks:
             if cb.id == msg.accountName:
+                self.output('completing account data callback: %s %s' % (msg.accountName, repr(cb)))
                 cb.complete(self.account_data[msg.accountName])
+                self.output('completed account data callback: %s %s' % (msg.accountName, repr(cb)))
                 dcb.append(cb)
                 self.tws_conn.reqAccountUpdates(False, msg.accountName)
+                self.output('cancelling account updates: %s' % msg.accountName)
+                self.pending_account_data_requests.discard(msg.accountName)
         for cb in dcb:
            del self.accountdata_callbacks[self.accountdata_callbacks.index(cb)]
         

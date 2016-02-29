@@ -123,6 +123,10 @@ class authorized_xmlserver(XMLRPC):
         self.api.set_account(account, ret.callback)
         return ret
 
+    def errback_xmlrpc(self, failure):
+        self.output('ERROR: XMLRPC ERRBACK: %s', repr(failure))
+        return failure
+
     def xmlrpc_query_account(self, account):
         """query_account(account) => {'key': (value, currency), ...}
 
@@ -130,6 +134,7 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_query_account(%s)' % account)
         ret = defer.Deferred()
+        ret.addErrback(self.errback_xmlrpc)
         self.api.request_account_data(account, ret.callback)
         return ret
       
