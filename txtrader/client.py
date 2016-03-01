@@ -14,9 +14,11 @@
 import httplib
 import xmlrpclib
 import socket
+import errno
 import traceback
 from sys import stderr
 from os import environ
+import types
 
 import version
 
@@ -67,7 +69,7 @@ class API():
       'query_symbols': (self.query_symbols, True, ()),
       'set_account': (self.set_account, False, ('account',)),
       'query_accounts': (self.query_accounts, False, ()),
-      'query_account': (self.query_account, True, ('account',)),
+      'query_account': (self.query_account, True, ('account', 'fields')),
       'query_positions': (self.query_positions, True, ()),
       'query_orders': (self.query_orders, True, ()),
       'query_order': (self.query_order, True, ('order_id',)),
@@ -115,14 +117,22 @@ class API():
         tries+=1
 	ret = getattr(self.proxy, function_name)(*args)
       except socket.timeout, ex:
-        if tries < self.retry_limit:
-          stderr.write('Exception: API(%s)@%s:%s %s (will retry)\n' % (self.server, self.hostname, self.port, repr(ex)))
+        self.retry_or_fail(tries, ex)
+      except socket.error, ex:
+        if ex.errno == errno.ECONNREFUSED:
+          self.retry_or_fail(tries, ex)
         else:
           self.process_error(ex)
       except Exception, ex:
-          self.process_error(ex)
+        self.process_error(ex)
       else:
         return ret
+
+  def retry_or_fail(self, tries, ex):
+    if tries < self.retry_limit:
+      stderr.write('Exception: API(%s)@%s:%s %s (will retry)\n' % (self.server, self.hostname, self.port, repr(ex)))
+    else:
+      self.process_error(ex)
 
   def process_error(self, ex):
     stderr.write('Error: API(%s)@%s:%s call failed: %s\n' % (self.server, self.hostname, self.port, traceback.format_exc()))
@@ -159,6 +169,14 @@ class API():
     return self.call_with_retry('query_accounts', args)
 
   def query_account(self, *args):
+    account = args[0]
+    fields = None 
+    if (len(args)>1) and args[1]:
+      if type(args[1]) == types.StringType: 
+        fields = args[1].split(',') 
+      elif type(args[1]) == types.ListType:
+        fields = args[1]
+    args=(account,fields)
     return self.call_with_retry('query_account', args)
 
   def set_account(self, *args):

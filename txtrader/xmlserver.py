@@ -73,7 +73,8 @@ class authorized_xmlserver(XMLRPC):
         symbol=symbol.upper()
         self.output('xmlrpc_add_symbol%s' % repr((symbol)))
         ret = defer.Deferred()
-        self.api.symbol_enable(symbol, self, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.symbol_enable(symbol, self, ret)
         return ret
       
     def xmlrpc_del_symbol(self, symbol):
@@ -120,22 +121,23 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_set_account(%s)' % account)
         ret = defer.Deferred()
-        self.api.set_account(account, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.set_account(account, ret)
         return ret
 
     def errback_xmlrpc(self, failure):
-        self.output('ERROR: XMLRPC ERRBACK: %s', repr(failure))
+        self.output('ERROR: XMLRPC Errback: %s' % repr(failure))
         return failure
 
-    def xmlrpc_query_account(self, account):
-        """query_account(account) => {'key': (value, currency), ...}
+    def xmlrpc_query_account(self, account, fields):
+        """query_account(account, fields) => {'key': (value, currency), ...}
 
-        Query account data for account.
+        Query account data for account. fields is list of fields to select; None=all fields
         """
         self.output('xmlrpc_query_account(%s)' % account)
         ret = defer.Deferred()
         ret.addErrback(self.errback_xmlrpc)
-        self.api.request_account_data(account, ret.callback)
+        self.api.request_account_data(account, fields, ret)
         return ret
       
     def xmlrpc_query_positions(self):
@@ -145,7 +147,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_query_positions()')
         ret = defer.Deferred()
-        self.api.request_positions(ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.request_positions(ret)
         return ret
       
     def xmlrpc_query_order(self, id):
@@ -166,7 +169,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_query_orders()')
         ret = defer.Deferred()
-        self.api.request_orders(ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.request_orders(ret)
         return ret
         
     def xmlrpc_query_executions(self):
@@ -176,7 +180,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_query_executions()')
         ret = defer.Deferred()
-        self.api.request_executions(ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.request_executions(ret)
         return ret
       
     def xmlrpc_market_order(self, symbol, quantity):
@@ -186,7 +191,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_market_order%s' % repr((symbol, quantity)))
         ret = defer.Deferred()
-        self.api.market_order(symbol, quantity, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.market_order(symbol, quantity, ret)
         return ret
         
     def xmlrpc_limit_order(self, symbol, price, quantity):
@@ -196,7 +202,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_limit_order%s' % repr((symbol, price, quantity)))
         ret = defer.Deferred()
-        self.api.limit_order(symbol, price, quantity, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.limit_order(symbol, price, quantity, ret)
         return ret
       
     def xmlrpc_stop_order(self, symbol, price, quantity):
@@ -206,7 +213,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_stop_order%s' % repr((symbol, price, quantity)))
         ret = defer.Deferred()
-        self.api.stop_order(symbol, price, quantity, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.stop_order(symbol, price, quantity, ret)
         return ret
       
     def xmlrpc_stoplimit_order(self, symbol, stop_price, limit_price, quantity):
@@ -216,7 +224,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_stoplimit_order%s' % repr((symbol, stop_price, limit_price, quantity)))
         ret = defer.Deferred()
-        self.api.stoplimit_order(symbol, stop_price, limit_price, quantity, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.stoplimit_order(symbol, stop_price, limit_price, quantity, ret)
         return ret
       
     def xmlrpc_query_bars(self, symbol, period, start, end):
@@ -227,7 +236,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_query_bars%s' % repr((symbol, period, start, end)))
         ret = defer.Deferred()
-        self.api.query_bars(symbol, period, start, end, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.query_bars(symbol, period, start, end, ret)
         return ret
       
     def xmlrpc_cancel_order(self, id):
@@ -237,7 +247,8 @@ class authorized_xmlserver(XMLRPC):
         """
         self.output('xmlrpc_cancel_order%s' % repr((id)))
         ret = defer.Deferred()
-        self.api.cancel_order(id, ret.callback)
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.cancel_order(id, ret)
         return ret
     
     def xmlrpc_global_cancel(self):

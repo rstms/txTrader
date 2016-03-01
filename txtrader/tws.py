@@ -19,7 +19,7 @@ import time
 
 from os import environ
 
-DEFAULT_TWS_CALLBACK_TIMEOUT = 3
+DEFAULT_TWS_CALLBACK_TIMEOUT = 5
 
 SHUTDOWN_ON_TWS_DISCONNECT = True
 
@@ -117,26 +117,25 @@ class TWS_Callback():
         self.callable=callable
         self.done=False
         self.data=None
-        
+
     def complete(self, results):
         """complete callback by calling callable function with value of results[self.type]"""
         if not self.done:
-            if self.callable.__name__=='write':
+            if self.callable.callback.__name__=='write':
                 results='%s.%s: %s\n' % (self.tws.channel, self.label, json.dumps(results))
-            self.tws.output('callback: %s writing results to callable: %s' % (self, repr(results)))
-            self.callable(results)
+            self.callable.callback(results)
             self.done=True
         else:
-            self.tws.output('callback: %s was already done!' % self)
+            self.tws.output('error: callback: %s was already done!' % self)
             
     def check_expire(self):
         if not self.done:
             if int(mx.DateTime.now()) > self.expire:
                 self.tws.WriteAllClients('error: callback expired: %s' % repr((self.id, self.label)))
-                if self.callable.__name__=='write':
-                    self.callable('%s.error: %s callback expired\n', (self.tws.channel, self.label))
+                if self.callable.callback.__name__=='write':
+                    self.callable.callback('%s.error: %s callback expired\n', (self.tws.channel, self.label))
                 else:
-                    self.callable(None)
+                    self.callable.callback(None)
                 self.done=True
         
 class TWS():
@@ -632,13 +631,15 @@ class TWS():
             self.tws_conn.reqExecutions(id, filter)
         self.execution_callbacks.append(TWS_Callback(self, 0, 'executions', callback))
 
-    def request_account_data(self, account, callback):
+    def request_account_data(self, account, fields, callback):
         need_request = False
         if account not in self.pending_account_data_requests:
             self.account_data[account]={}
             need_request = True
         
-        self.accountdata_callbacks.append(TWS_Callback(self, account, 'account_data', callback))
+        cb = TWS_Callback(self, account, 'account_data', callback)
+        cb.data = fields
+        self.accountdata_callbacks.append(cb)
 
         if need_request:
             self.output('requesting account updates: %s' % account)
@@ -647,8 +648,6 @@ class TWS():
             self.tws_conn.reqAccountUpdates(True, account)
         else:
             self.output('NOT requesting account updates: %s (one is already pending)' % account)
-
-        self.output('returning from request_acount_data')
 
     def handle_account_value(self, msg):
         self.output('%s %s %s %s %s' % (repr(msg), msg.key, msg.value, msg.currency, msg.accountName))
@@ -661,9 +660,15 @@ class TWS():
         dcb=[]
         for cb in self.accountdata_callbacks:
             if cb.id == msg.accountName:
-                self.output('completing account data callback: %s %s' % (msg.accountName, repr(cb)))
-                cb.complete(self.account_data[msg.accountName])
-                self.output('completed account data callback: %s %s' % (msg.accountName, repr(cb)))
+                account_data = self.account_data[msg.accountName]
+                # if field list specified, only return those fields, else return all fields
+                if cb.data:
+                  response_data={}
+                  for field in cb.data:
+                    response_data[field] = account_data[field] if field in account_data.keys() else None
+                else:
+                  response_data = account_data
+                cb.complete(response_data)
                 dcb.append(cb)
                 self.tws_conn.reqAccountUpdates(False, msg.accountName)
                 self.output('cancelling account updates: %s' % msg.accountName)
