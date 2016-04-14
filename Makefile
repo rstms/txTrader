@@ -9,6 +9,7 @@ TXTRADER_PYTHON = /usr/local/lib/python2.7.11/bin/python
 TXTRADER_ENVDIR = /etc/txtrader
 TXTRADER_VENV = $(HOME)/txtrader-venv
 
+TXTRADER_TEST_MODE = rtx 
 TXTRADER_TEST_HOST = 127.0.0.1
 TXTRADER_TEST_PORT = 17496
 # set account to AUTO for make testconfig to auto-set demo account
@@ -42,12 +43,13 @@ testconfig:
 	$(MAKE) start
 	sudo sh -c "echo $(TXTRADER_TEST_HOST)>$(TXTRADER_ENVDIR)/TXTRADER_API_HOST"
 	sudo sh -c "echo $(TXTRADER_TEST_PORT)>$(TXTRADER_ENVDIR)/TXTRADER_API_PORT"
+	sudo sh -c "echo $(TXTRADER_TEST_ACCOUNT)>$(TXTRADER_ENVDIR)/TXTRADER_API_ACCOUNT"
 	@echo -n "Restarting txTrader service..."
 	@sudo svc -t /etc/service/txtrader
-	@while ! (txtrader 2>/dev/null tws status); do echo -n .; done
+	@while ! (txtrader 2>/dev/null $(TXTRADER_TEST_MODE) status); do echo -n .; sleep 1; done
 	@if [ "$(TXTRADER_TEST_ACCOUNT)" = "AUTO" ]; then\
 	  . $(TXTRADER_VENV)/bin/activate;\
-          export ACCOUNT="`envdir /etc/txtrader txtrader tws query_accounts | tr -d []\'`";\
+          export ACCOUNT="`envdir /etc/txtrader txtrader $(TXTRADER_TEST_MODE) query_accounts | tr -d \"[]\'\n\"`";\
 	else\
 	  export ACCOUNT="$(TXTRADER_TEST_ACCOUNT)";\
 	fi;\
@@ -95,6 +97,8 @@ uninstall:
 	rm -f /usr/local/bin/txtrader
 
 TESTS := $(wildcard txtrader/test-*.py)
+
+.PHONY: test 
 
 test: $(TESTS)
 	@echo "Testing..."

@@ -20,27 +20,29 @@ import time
 
 from os import environ
 
+from client import Config
+
 DEFAULT_CALLBACK_TIMEOUT = 5
 
+DISCONNECT_SECONDS = 15
 SHUTDOWN_ON_DISCONNECT = True
+ADD_SYMBOL_TIMEOUT = 5
 
 from twisted.python import log
 from twisted.internet.protocol import Factory, Protocol
-from twisted.internet import reactor, protocol, defer
+from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
 from twisted.web import xmlrpc, server
-from twisted.protocols.basic import LineReceiver
 from socket import gethostname
 
-from xmlserver import xmlserver
-from tcpserver import serverFactory
 
-class RTX_Symbol():
-    def __init__(self, api, symbol, client_id):
+class API_Symbol():
+    def __init__(self, api, symbol, client_id, init_callback):
         self.api = api 
+        self.id = str(uuid1())
         self.output = api.output
-        self.ticktype = TickType()
         self.clients=set([client_id])
+        self.callback = init_callback
         self.symbol=symbol
         self.bid=0.0
         self.bid_size=0
@@ -52,12 +54,14 @@ class RTX_Symbol():
 	self.close=0.0
         self.api.symbols[symbol]=self
         self.last_quote = ''
-        self.output('RTX_Symbol %s %s created for client %s' % (self, symbol, client_id))
+        self.output('API_Symbol %s %s created for client %s' % (self, symbol, client_id))
         self.output('Adding %s to watchlist' % self.symbol)
-        # TODO: request live updates of market data from RTX
+        self.cxn = api.cxn_get('TA_SRV', 'LIVEQUOTE')
+        cb = API_Callback(self.api, self.cxn.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), ADD_SYMBOL_TIMEOUT)
+        self.cxn.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
         
     def __str__(self):
-        return 'RTX_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.clients)
+        return 'API_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.clients)
         
     def __repr__(self):
         return str(self)
@@ -77,15 +81,15 @@ class RTX_Symbol():
         }
       
     def add_client(self, client):
-        self.output('RTX_Symbol %s %s adding client %s' % (self, self.symbol, client))
+        self.output('API_Symbol %s %s adding client %s' % (self, self.symbol, client))
         self.clients.add(client)
       
     def del_client(self, client):
-        self.output('RTX_Symbol %s %s deleting client %s' % (self, self.symbol, client))
+        self.output('API_Symbol %s %s deleting client %s' % (self, self.symbol, client))
         self.clients.discard(client)
         if not self.clients:
             self.output('Removing %s from watchlist' % self.symbol)
-            # TODO: request live updates of market data from RTX
+            # TODO: stop live updates of market data from RTX
             
     def update_quote(self):
         quote = 'quote.%s:%s %d %s %d' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size)
@@ -95,10 +99,23 @@ class RTX_Symbol():
           
     def update_trade(self):
         self.api.WriteAllClients('trade.%s:%s %d %d' % (self.symbol, self.last, self.size, self.volume))
+
+    def init_handler(self, data):
+        self.output('API_Symbol init: %s' % data)
+        self.rawdata = data
+        self.api.symbol_init(self)
+        #self.cxn = api.cxn_get('TA_SRV', 'LIVEQUOTE')
+        #self.cxn.advise('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, self.update_handler)
+
+    def update_handler(self, data):
+        self.output('API_Symbol update: %s' % data)
+        self.rawdata = data
+
         
 class API_Callback():
     def __init__(self, api, id, label, callable, timeout=0):
-        """type is stored and used to index dict of return results on callback"""
+        """callable is stored and used to return results later"""
+        api.output('API_Callback.__init__() %s' % self)
         self.api=api
         self.id=id
         self.label=label
@@ -110,7 +127,8 @@ class API_Callback():
         self.data=None
 
     def complete(self, results):
-        """complete callback by calling callable function with value of results[self.type]"""
+        """complete callback by calling callable function with value of results"""
+        self.api.output('API_Callback.complete() %s' % self)
         if not self.done:
             if self.callable.callback.__name__=='write':
                 results='%s.%s: %s\n' % (self.api.channel, self.label, json.dumps(results))
@@ -120,6 +138,7 @@ class API_Callback():
             self.api.output('error: callback: %s was already done!' % self)
             
     def check_expire(self):
+        self.api.output('API_Callback.check_expire() %s' % self)
         if not self.done:
             if int(mx.DateTime.now()) > self.expire:
                 self.api.WriteAllClients('error: callback expired: %s' % repr((self.id, self.label)))
@@ -129,55 +148,157 @@ class API_Callback():
                     self.callable.callback(None)
                 self.done=True
 
+# set an update_handler to handle async updates
+# set response pending,
 class RTX_Connection():
-  def __init__(self, api, name, service, topic):
+  def __init__(self, api, service, topic):
     self.api = api
-    self.name = name
+    self.id = str(uuid1())
     self.service = service
     self.topic = topic
-    self.id = str(uuid1())
-    self.api.gateway_send('connect %s %s;%s' % (self.id, service, topic))
+    self.key = '%s;%s' % (service, topic)
+    self.api.cxn_register(self)
+    self.api.gateway_send('connect %s %s' % (self.id, self.key))
+    self.response_pending='CONNECTION PENDING'
+    self.response_callback=None
+    self.status_pending = 'OnInitAck'
+    self.status_callback=None
+    self.update_callback=None
+    self.update_handler=None
+    self.connected = False
+    self.on_connect_action=None
+    self.update_ready()
 
-  def query(self, cmd, table, what, where):
-    return self.api.gateway_send('%s %s %s;%s;%s' % (cmd, self.id, table, what, where))
+  def update_ready(self):
+    self.ready = not(self.response_pending or self.response_callback or self.status_pending or self.status_callback or self.update_callback or self.update_handler)
+    self.api.output('update_ready() %s %s' % (self, self.ready))
+    if self.ready:
+      self.api.cxn_activate(self) 
 
-  def request(self, table, what, where):
-    return self.query('request', table, what, where)
+  def receive(self, type, data):
+    if type=='response':
+      self.handle_response(data)
+    elif type == 'status':
+      self.handle_status(data)
+    elif type == 'update':
+      self.handle_update(data)
+    else:
+      self.api.error_handler(self.id, 'Message Type Unexpected: %s' % data) 
+    self.update_ready()
 
-  def advise(self, table, what, where):
-    return self.query('advise', table, what, where)
+  def handle_response(self, data):
+    self.api.output('Connection Response: %s %s' % (self, data))
+    if self.response_pending:
+      if data == self.response_pending:
+        self.response_pending=None
+      else:
+        self.api.error_handler(id, 'Response Error: %s' % data) 
+      if self.response_callback:
+        self.response_callback.complete(data)
+        self.response_callback = None
+    else:
+      self.api.error_handler(id, 'Response Unexpected: %s' % data) 
 
-  def adviserequest(self, table, what, where):
-    return self.query('adviserequest', table, what, where)
+  def handle_status(self, s):
+    self.api.output('Connection Status: %s %s' % (self, s))
+    if self.status_pending and s['msg']==self.status_pending:
+      self.status_pending = None
+      if s['status']=='1':
+        if s['msg']=='OnInitAck':
+          self.connected = True
+          if self.on_connect_action:
+            self.ready = True
+            cmd, arg, exr, cbr, exs, cbs, cbu, uhr = self.on_connect_action
+            self.api.output('Sending on_connect_action: %s' % repr(self.on_connect_action))
+            self.send(cmd, arg, exr, cbr, exs, cbs, cbu, uhr)
+            self.on_connect_action = None
+      else:
+        self.api.error_handler(self.id, 'Status Error: %s' % data) 
+    else:
+      self.api.error_handler(self.id, 'Status Unexpected: %s' % data) 
 
-  def unadvise(self, table, what, where):
-    return self.query('unadvise', table, what, where)
+  def handle_update(self, d):
+    self.api.output('Connection Update: %s %s' % (self, repr(d)))
+    if self.update_callback:
+      self.update_callback.complete(d)
+      self.update_callback=None
+    else:
+      if self.update_handler:
+        self.update_handler(self, d)
+      else:
+        self.api.error_handler(self.id, 'Update Unexpected: %s' % repr(d)) 
 
-  def poke(self, table, what, where, data):
-    return self.api.gateway_send('poke %s %s;%s;%s!%s' % (self.id, table, what, where, data))
+  def query(self, cmd, table, what, where, ex_response, cb_response, ex_status, cb_status, cb_update, update_handler):
+    ret = self.send(cmd, '%s;%s;%s' % (table, what, where), ex_response, cb_response, ex_status, cb_status, cb_update, update_handler)
 
-  def execute(self, command):
-    return self.api.gateway_send('execute %s %s' % (self.id, command))
+  def request(self, table, what, where, callback):
+    return self.query('request', table, what, where, 'REQUEST_OK', None, None, None, callback, None)
+
+  def advise(self, table, what, where, handler):
+    return self.query('advise', table, what, where, 'ADVISE_OK', None, 'OnOtherAck', None, None, handler)
+
+  def adviserequest(self, table, what, where, callback, handler):
+    return self.query('adviserequest', table, what, where, 'ADVISEREQUEST_OK', None, 'OnOtherAck', None, callback, handler)
+
+  def unadvise(self, table, what, where, callback):
+    return self.query('unadvise', table, what, where, 'UNADVISE_OK', None, 'OnOtherAck', callback, None, None)
+
+  def poke(self, table, what, where, data, callback):
+    return self.send('poke', '%s;%s;%s!%s' % (table, what, where, data), "POKE_OK", callback)
+
+  def execute(self, command, callback):
+    return self.send('execute', command, "EXECUTE_OK", callback)
    
-  def terminate(self, code):
-    return self.api.gateway_send('terminate %s %s' % (self.id, code))
+  def terminate(self, code, callback):
+    return self.send('terminate', str(code), "TERMINATE_OK", callback)
   
+  def send(self, cmd, args, ex_response=None, cb_response=None, ex_status=None, cb_status=None, cb_update=None, update_handler=None):
+    if self.ready:
+      ret = self.api.gateway_send('%s %s %s' % (cmd, self.id, args))
+      self.response_pending = ex_response
+      self.response_callback = cb_response
+      self.status_pending = ex_status
+      self.status_callback = cb_status
+      self.update_callback = cb_update
+      self.update_handler = update_handler
+    else:
+      if self.on_connect_action:
+        self.api.error_handler(self.id, 'Failure: on_connect_action already exists: %s' % repr(self.on_connect_action)) 
+        ret=False
+      else:
+        self.api.output('storing on_connect_action...%s' % self)
+        self.on_connect_action=(cmd, args, ex_response, cb_response, ex_status, cb_status, cb_update, update_handler)
+        ret=True
+    return ret
+
+class RTX_LocalCallback:
+  def __init__(self, api, handler):
+    self.api = api
+    self.callback_handler = handler
+
+  def callback(self, data):
+    if self.callback_handler:
+        self.callback_handler(data)
+    else:
+        self.api.error_handler(self.id, 'Failure: undefined callback_handler for Connection: %s' % repr(self)) 
 
 class RTX():
-
     def __init__(self):
+        self.label = 'RTX Gateway'
+        self.channel = 'rtx'
         self.output('RTX init')
-        self.username = environ['TXTRADER_USERNAME']
-        self.password = environ['TXTRADER_PASSWORD']
-        self.xmlrpc_port = int(environ['TXTRADER_XMLRPC_PORT'])
-        self.tcp_port = int(environ['TXTRADER_TCP_PORT'])
-        self.callback_timeout = int(environ['TXTRADER_CALLBACK_TIMEOUT'])
+        self.config = Config(self.channel)
+        self.api_hostname = self.config.get('API_HOST')
+        self.api_port = int(self.config.get('API_PORT'))
+        self.username = self.config.get('USERNAME')
+        self.password = self.config.get('PASSWORD')
+        self.xmlrpc_port = int(self.config.get('XMLRPC_PORT'))
+        self.tcp_port = int(self.config.get('TCP_PORT'))
+        self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
         if not self.callback_timeout:
           self.callback_timeout = DEFAULT_CALLBACK_TIMEOUT
         self.output('callback_timeout=%d' % self.callback_timeout)
-        self.enable_ticker = bool(int(environ['TXTRADER_ENABLE_TICKER']))
-        self.label = 'RTX Gateway'
-        self.channel = 'rtx'
+        self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
         self.current_account=''
         self.clients=set([])
         self.orders={}
@@ -195,44 +316,52 @@ class RTX():
         self.order_callbacks=[]
         self.addsymbol_callbacks=[]
         self.accountdata_callbacks=[]
+        self.timer_callbacks=[]
+        self.connected=False
         self.last_connection_status=''
         self.connection_status='Initializing'
         self.LastError=-1
         self.next_order_id=-1
         self.last_minute=-1
-        self.handlers={
-          'error': self.error_handler,
-          'tickSize': self.handle_tick_size,
-          'tickPrice': self.handle_tick_price,
-          'tickString': self.handle_tick_string,
-          'nextValidId': self.handle_next_valid_id,
-          'currentTime': self.handle_time,
-          'managedAccounts': self.handle_accounts,
-          'orderStatus': self.handle_order_status,
-          'openOrder': self.handle_open_order,
-          'openOrderEnd': self.handle_open_order_end,
-          'execDetails': self.handle_exec_details,
-          'execDetailsEnd': self.handle_exec_details_end,
-          'position': self.handle_position,
-          'positionEnd': self.handle_position_end,
-          'historicalData': self.handle_historical_data,
-          'updateAccountValue': self.handle_account_value,
-          'accountDownloadEnd': self.handle_account_download_end,
-        }
         self.symbols={}
         self.primary_exchange_map={}
         self.gateway_sender=None
-        repeater = LoopingCall(self.EverySecond)
-        repeater.start(1)
+        self.active_cxn={}
+        self.idle_cxn={}
+        self.cx_time=None
+        self.seconds_disconnected=0
+        self.repeater = LoopingCall(self.EverySecond)
+        self.repeater.start(1)
+
+    def cxn_register(self, cxn):
+        self.output('cxn_register: %s' % repr(cxn))
+        self.active_cxn[cxn.id]=cxn
+
+    def cxn_activate(self, cxn):
+        self.output('cxn_activate: %s' % repr(cxn))
+        if not cxn.key in self.idle_cxn.keys():
+            self.idle_cxn[cxn.key]=[]
+        self.idle_cxn[cxn.key].append(cxn)
+
+    def cxn_get(self, service, topic):
+        key = '%s;%s' % (service, topic)
+        if key in self.idle_cxn.keys() and len(self.idle_cxn[key]):
+          cxn = self.idle_cxn[key].pop()
+        else:
+          cxn = RTX_Connection(self, service, topic)
+        self.output('cxn_get() returning: %s' % repr(cxn))
+        return cxn
 
     def gateway_connect(self, protocol):
         if protocol:
             self.gateway_sender = protocol.sendLine
-            self.output('Gatweway connected') 
             self.gateway_transport = protocol.transport
         else:
-            self.output('Gatweway disconnected') 
             self.gateway_sender = None
+            self.connected=False
+            self.seconds_disconnected=0
+            self.update_connection_status('Disconnected')
+            self.WriteAllClients('error: API Disconnected')
         return self.gateway_receive
 
     def gateway_send(self, msg):
@@ -241,15 +370,38 @@ class RTX():
             self.gateway_sender('%s\n' % msg)
 
     def gateway_receive(self, msg):
-        """Handles of server replies"""
-        self.output('--> %s' % repr(msg))
-        #if msg.typeName in self.handlers.keys():
-        #    self.handlers[msg.typeName](msg)
-        #else:
-        #    self.output('unhandled: %s' % msg)
+        """handle input from rtgw """
+        o = json.loads(msg)
+        msg_type = o['type']
+        msg_id =  o['id']
+        msg_data = o['data']
+        self.output('--> %s %s %s' % (msg_type, msg_id, msg_data))
  
+        if msg_type == 'system':
+            self.handle_system_message(msg_id, msg_data)
+        else:
+            if msg_id in self.active_cxn.keys():
+                c = self.active_cxn[msg_id].receive(msg_type, msg_data)
+            else:
+                self.error_handler(msg_id, 'Message Received on Unknown connection: %s' % repr(msg)) 
+
+        return True
+
+    def handle_system_message(self, id, data):
+        if data['msg']=='startup':
+            self.connected = True
+            self.update_connection_status('Connected')
+            self.output('Connected to %s' % data['item'])
+            self.setup_local_queries()
+        else:
+            self.error_handler(msg_id, 'Unknown system message: %s' % repr(data)) 
+
+    def setup_local_queries(self):
+        """Upon connection to rtgw, start automatic queries"""
+        self.rtx_request('ACCOUNT_GATEWAY', 'ORDER', 'ACCOUNT', '*', '', 'accounts', self.handle_accounts, self.accountdata_callbacks, 5)
+
     def output(self, msg):
-        sys.stderr.write(msg+'\n')
+        sys.stderr.write('%s\n' % msg)
         sys.stderr.flush()
         
     def open_client(self, client):
@@ -273,34 +425,19 @@ class RTX():
               
     def CheckPendingResults(self):
         # check each callback list for timeouts
-        for cblist in [self.position_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.addsymbol_callbacks, self.accountdata_callbacks]:
+        for cblist in [self.timer_callbacks, self.position_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.addsymbol_callbacks, self.accountdata_callbacks]:
             dlist=[]
             for cb in cblist:
                 cb.check_expire()
                 if cb.done:
                     dlist.append(cb)
-                    if cblist == self.order_callbacks:
-                        mid=str(cb.id)
-                        if mid in self.pending_orders.keys():
-                            del(self.pending_orders[mid])
-                            self.output('pending order %s expired' % mid)
             # delete any callbacks that are done
             for cb in dlist:  
                 cblist.remove(cb)
               
-    def process_pending_order(self, mid, pid):
-        # if there's a pending order with this msg id, this is the first time we
-        # know the permid for the order, so move it to the real orders dict
-        if mid in self.pending_orders.keys():
-          self.orders[pid]=self.pending_orders[mid]
-          self.orders[pid]['permid']=pid
-          del(self.pending_orders[mid])
-          self.output('pending order %s assigned permid %s' % (mid, pid))
-        
     def handle_order_status(self, msg):
         mid=str(msg.orderId)
         pid=str(msg.permId)
-        self.process_pending_order(mid, pid)
         if not pid in self.orders.keys():
             self.orders[pid] = {}
         m=self.orders[pid]
@@ -339,7 +476,6 @@ class RTX():
     def handle_open_order(self, msg):
         mid = str(msg.orderId)
         pid = str(msg.order.m_permId)
-        self.process_pending_order(mid, pid)
         if not pid in self.orders.keys():
             self.orders[pid] = {}
         m=self.orders[pid]
@@ -363,7 +499,11 @@ class RTX():
             self.WriteAllClients('open-order.%s: %s' % (m['permid'], json.dumps(m)))
         
     def handle_accounts(self, msg):
-        self.accounts = msg.accountsList.split(',')
+        self.accounts = []
+        for row in msg:
+            account = '%s.%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'], row['ACCT_TYPE'])
+            self.accounts.append(account)
+        self.accounts.sort()
         self.WriteAllClients('accounts: %s' % json.dumps(self.accounts))
 
     def set_account(self, account_name, callback):
@@ -378,63 +518,52 @@ class RTX():
             ret=False
         self.WriteAllClients('current-account: %s' % self.current_account)
         if callback:
-            TWS_Callback(self, 0, 'current-account', callback).complete(ret)
+            API_Callback(self, 0, 'current-account', callback).complete(ret)
         else:
            return ret
 
+    def rtx_request(self, service, topic, table, what, where, label, handler, cb_list, timeout=0): 
+        cxn = self.cxn_get(service, topic)
+        cb = API_Callback(self, cxn.id, label, RTX_LocalCallback(self, handler), timeout)
+        cxn.request(table, what, where, cb)
+        cb_list.append(cb)
+
     def EverySecond(self):
-        if self.gateway_time_connection:
-            self.gateway_send("request LIVEQUOTE;DISP_NAME,TRDTIM_1,TRD_DATE;DISP_NAME='$TIME' %s" % self.gateway_time_connection)
+        if self.connected:
+             self.rtx_request('TA_SRV', 'LIVEQUOTE', 'LIVEQUOTE', 'DISP_NAME,TRDTIM_1,TRD_DATE', "DISP_NAME='$TIME'", 'tick', self.handle_time, self.timer_callbacks, 5)
         else:
-            self.connect()
+            self.seconds_disconnected += 1
+            if self.seconds_disconnected > DISCONNECT_SECONDS:
+                self.output('Realtick Gateway is disconnected; forcing shutdown')
+                if SHUTDOWN_ON_DISCONNECT:
+                    reactor.stop()
 
         self.CheckPendingResults()
-    
-        if self.LastError == 504:
-            self.output('TWS API disconnected; forcing shutdown')
-            if SHUTDOWN_ON_DISCONNECT:
-                reactor.stop()
       
     def WriteAllClients(self, msg):
-        #self.output('WriteAllClients: %s.%s' % (self.channel, msg))
+        self.output('WriteAllClients: %s.%s' % (self.channel, msg))
         msg = str('%s.%s\n' % (self.channel, msg))      
         for c in self.clients:
             c.transport.write(msg)
       
-    def error_handler(self, msg):
+    def error_handler(self, id, msg):
         """Handles the capturing of error messages"""
-        if msg.id is None and msg.errorCode is None:
-            return
-        self.LastError = msg.errorCode
         self.output('error: %s' % msg)
-        result={'status':'Error','id':msg.id,'errorCode':msg.errorCode,'errorMsg':msg.errorMsg}
+        result={'status':'Error','id':id,'errorCode':-1,'errorMsg':msg}
 
         for cb in self.order_callbacks:
-            if str(cb.id) == str(msg.id):
+            if str(cb.id) == id:
                 cb.complete(result)
 
         for cb in self.cancel_callbacks:
-            if str(cb.id) == str(msg.id):
+            if str(cb.id) == id:
                 cb.complete(result)
 
         for cb in self.addsymbol_callbacks:
-            if str(cb.id.ticker_id) == str(msg.id):
+            if str(cb.id) == id:
                 cb.complete(False)
                 del(self.symbols[self.symbols_by_id[msg.id].symbol])
                 del(self.symbols_by_id[msg.id])
-
-        order = self.find_order_with_id(str(msg.id))
-        if order:
-            order['previous_status']=order['status']
-            order['status']='Error'
-            order['errorCode']=msg.errorCode
-            order['errorMsg']=msg.errorMsg
-            self.send_order_status(order)
-            
-        if msg.errorCode in [1100, 1300]:
-            self.update_connection_status('Disconnected')
-        elif msg.errorCode in [1101, 1102, 2104]:
-            self.update_connection_status('Up')
 
         self.WriteAllClients('error: %s' % msg)
 
@@ -444,11 +573,12 @@ class RTX():
                 return order
         return None
             
-    def handle_time(self, msg):
-        t = time.localtime(msg.time)
-        if t[4] != self.last_minute:
-            self.last_minute = t[4]
-            self.WriteAllClients('time: %s' % time.strftime('%Y-%m-%d %H:%M:00', t))
+    def handle_time(self, rows):
+        print('handle_time: %s' % json.dumps(rows))
+        hour, minute = [int(i) for i in rows[0]['TRDTIM_1'].split(':')[0:2]]
+        if minute != self.last_minute:
+            self.last_minute = minute
+            self.WriteAllClients('time: %s %02d:%02d:00' % (rows[0]['TRD_DATE'], hour, minute))
       
     def create_contract(self, symbol, sec_type, exch, prim_exch, curr):
         """Create a Contract object defining what will
@@ -487,11 +617,7 @@ class RTX():
     
     def connect(self):
         self.update_connection_status('Connecting')
-        api_client_id = int(environ['TXTRADER_API_CLIENT_ID'])
-        self.output('Connnecting to TWS API at %s:%d with client id %d' % (api_hostname, api_port, api_client_id))
-        self.tws_conn = Connection.create(host=api_hostname, port=api_port, clientId=api_client_id)
-        self.tws_conn.registerAll(self.reply_handler)
-        self.tws_conn.connect()
+        self.output('Awaiting startup response from RTX gateway at %s:%d...' % (self.api_hostname, self.api_port))
     
     def market_order(self, symbol, quantity, callback):
         return self.submit_order('MKT', 0, 0, symbol, int(quantity), callback)
@@ -506,32 +632,10 @@ class RTX():
         return self.submit_order('STP LMT', float(limit_price), float(stop_price), symbol, int(quantity), callback)
     
     def submit_order(self, order_type, price, stop_price, symbol, quantity, callback): 
-        order_id = self.next_id()
-        tcb = TWS_Callback(self, str(order_id), 'order', callback)
-        if(order_id < 0):
-            ret={'status': 'Error', 'errorMsg': 'Cannot create order; next_order_id is not set'}
-            tcb.complete(ret)
-        else:
-            status='Initialized'
-            self.pending_orders[str(order_id)]={}
-            self.pending_orders[str(order_id)]['status']=status
-            self.output('created pending order %s' % str(order_id))
-            contract = self.create_contract(symbol, 'STK', 'SMART', 'SMART', 'USD')
-            if quantity > 0:
-                type = 'BUY'
-            else:
-                type = 'SELL'
-                quantity *= -1
-            order = self.create_order(order_type, quantity, type)
-            if order_type in ['STP', 'STP LMT']:
-                order.m_auxPrice = stop_price
-            if order_type in ['LMT', 'STP LMT']:
-                order.m_lmtPrice = price
-            self.order_callbacks.append(tcb)
-            resp = self.tws_conn.placeOrder(order_id, contract, order)
-            self.output('placeOrder(%s) returned %s' % (repr((order_id, contract, order)), repr(resp)))
+        self.output('ERROR: submit_order unimplemented')
         
     def cancel_order(self, id, callback):
+        self.output('ERROR: cancel_order unimplemented')
         self.output('cancel_order%s' % repr((id)))
         mid=str(id)
         tcb = TWS_Callback(self, mid, 'cancel_order', callback)
@@ -548,11 +652,20 @@ class RTX():
       
     def symbol_enable(self, symbol, client, callback):
         if not symbol in self.symbols.keys():
-            self.addsymbol_callbacks.append(TWS_Callback(self, TWS_Symbol(self, symbol, client), 'add-symbol', callback))
+            #self.rtx_request('TA_SRV', 'LIVEQUOTE', 'LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, symbol, self.symbol_init, self.addsymbol_callbacks, 5)
+            cb = API_Callback(self, symbol, 'add-symbol', callback)
+            symbol = API_Symbol(self, symbol, client, cb)
+            self.addsymbol_callbacks.append(cb)
         else:
             self.symbols[symbol].add_client(client)
-            TWS_Callback(self, 0, 'add-symbol', callback).complete(True)
-          
+            API_Callback(self, 0, 'add-symbol', callback).complete(True)
+
+    def symbol_init(self, symbol):
+        ret = not 'SYMBOL_ERROR'in symbol.rawdata[0].keys()
+        if not ret:
+            self.symbol_disable(symbol, list(symbol.clients)[0])
+        symbol.callback.complete(ret)
+
     def symbol_disable(self, symbol, client):
         if symbol in self.symbols.keys():
             ts = self.symbols[symbol]
@@ -604,138 +717,40 @@ class RTX():
         if self.enable_ticker:
             self.output('%s %d %s %s' % (repr(msg), msg.tickType, TickType().getField(msg.tickType), msg.value))
         
-    def handle_next_valid_id(self, msg):
-        self.next_order_id = msg.orderId
-        msg='next_valid_id: %d' % msg.orderId
-        self.WriteAllClients(msg)
-        self.output(msg)
-        
-    def disconnect(self):
-        # Disconnect from TWS
-        self.output('TWS disconnected')
-        self.update_connection_status('Disconnected')
-        self.WriteAllClients('error: TWS API Disconnected')
-        self.tws_conn.disconnect()
-        
     def update_connection_status(self, status):
         self.connection_status = status
         if status != self.last_connection_status:
             self.last_connection_status=status
             self.WriteAllClients('connection-status-changed: %s' % status)
         
-    def next_id(self):
-        id = self.next_order_id
-        self.next_order_id += 1
-        return id
-        
     def request_positions(self, callback):
-        if not self.position_callbacks:
-            self.positions={}
-            self.tws_conn.reqPositions()
-        id = self.next_id()
-        self.position_callbacks.append(TWS_Callback(self, 0, 'positions', callback))
-        return id
-        
-    def handle_position(self, msg):
-        if not msg.account in self.positions.keys():
-            self.positions[msg.account] = {}
-        # only return STOCK positions
-        if msg.contract.m_secType == 'STK':
-          pos = self.positions[msg.account]
-          pos[msg.contract.m_symbol] = msg.pos  
-        
-    def handle_position_end(self, msg):
-        for cb in self.position_callbacks:
-            cb.complete(self.positions)
-        self.position_callbacks=[]
+        cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
+        cb = API_Callback(self, 0, 'positions', callback)
+        cxn.request('POSITION', '*', '', cb) 
+        self.position_callbacks.append(cb)
+        return cxn.id
         
     def request_orders(self, callback):
-        if not self.openorder_callbacks:
-            self.tws_conn.reqAllOpenOrders()
-        self.openorder_callbacks.append(TWS_Callback(self, 0, 'orders', callback))
+        cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
+        cb = API_Callback(self, 0, 'orders', callback)
+        cxn.request('ORDERS', '*', '', cb) 
+        self.openorder_callbacks.append(cb)
+        return cxn.id
           
-    def handle_open_order_end(self, msg):
-        for cb in self.openorder_callbacks:
-            cb.complete(self.orders)
-        self.openorder_callbacks=[]
-      
     def request_executions(self, callback):
-        if not self.execution_callbacks:
-            self.executions={}
-            filter=ExecutionFilter()
-            id=self.next_id()
-            self.tws_conn.reqExecutions(id, filter)
-        self.execution_callbacks.append(TWS_Callback(self, 0, 'executions', callback))
+        cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
+        cb = API_Callback(self, 0, 'executions', callback)
+        cxn.request('ORDERS', '*', "CURRENT_STATUS='COMPLETED',TYPE='ExchangeTradeOrder'", cb) 
+        self.execution_callbacks.append(cb)
+        return cxn.id
 
     def request_account_data(self, account, fields, callback):
-        need_request = False
-        if account not in self.pending_account_data_requests:
-            self.account_data[account]={}
-            need_request = True
-        
-        cb = TWS_Callback(self, account, 'account_data', callback)
-        cb.data = fields
+        cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
+        cb = API_Callback(self, 0, 'account_data', callback)
+        cxn.request('DEPOSIT', '*', '', cb) 
         self.accountdata_callbacks.append(cb)
+        return cxn.id
 
-        if need_request:
-            self.output('requesting account updates: %s' % account)
-            self.pending_account_data_requests.add(account)
-            self.tws_conn.reqAccountUpdates(False, account)
-            self.tws_conn.reqAccountUpdates(True, account)
-        else:
-            self.output('NOT requesting account updates: %s (one is already pending)' % account)
-
-    def handle_account_value(self, msg):
-        self.output('%s %s %s %s %s' % (repr(msg), msg.key, msg.value, msg.currency, msg.accountName))
-        if not msg.accountName in self.account_data.keys():
-          self.account_data[msg.accountName]={}
-        self.account_data[msg.accountName][msg.key]=(msg.value, msg.currency)
-
-    def handle_account_download_end(self, msg):
-        self.output('%s %s' % (repr(msg), msg.accountName))
-        dcb=[]
-        for cb in self.accountdata_callbacks:
-            if cb.id == msg.accountName:
-                account_data = self.account_data[msg.accountName]
-                # if field list specified, only return those fields, else return all fields
-                if cb.data:
-                  response_data={}
-                  for field in cb.data:
-                    response_data[field] = account_data[field] if field in account_data.keys() else None
-                else:
-                  response_data = account_data
-                cb.complete(response_data)
-                dcb.append(cb)
-                self.tws_conn.reqAccountUpdates(False, msg.accountName)
-                self.output('cancelling account updates: %s' % msg.accountName)
-                self.pending_account_data_requests.discard(msg.accountName)
-        for cb in dcb:
-           del self.accountdata_callbacks[self.accountdata_callbacks.index(cb)]
-        
-    def handle_exec_details(self, msg):
-        self.output('%s %s %s %s %s' % (repr(msg), msg.execution.m_side, msg.contract.m_symbol, msg.execution.m_cumQty, msg.execution.m_price))
-        self.executions[msg.execution.m_execId] = {}
-        e=self.executions[msg.execution.m_execId]
-        e['execId']=msg.execution.m_execId
-        e['symbol']=msg.contract.m_symbol
-        e['account']=msg.execution.m_acctNumber
-        e['avgprice']=msg.execution.m_avgPrice
-        e['cumqty']=msg.execution.m_cumQty
-        e['exchange']=msg.execution.m_exchange
-        e['clientid']=msg.execution.m_clientId
-        e['orderid']=msg.execution.m_orderId
-        e['permid']=msg.execution.m_permId
-        e['shares']=msg.execution.m_shares
-        e['price']=msg.execution.m_price
-        e['side']=msg.execution.m_side
-        e['time']=msg.execution.m_time
-        self.WriteAllClients('execution.%s: %s' % (e['execId'], json.dumps(e)))
-        
-    def handle_exec_details_end(self, msg):
-        for cb in self.execution_callbacks:
-            cb.complete(self.executions)
-        self.execution_callbacks=[]
-        
     def request_global_cancel(self):
         self.tws_conn.reqGlobalCancel()
         
@@ -779,71 +794,17 @@ class RTX():
     def query_connection_status(self):
         return self.connection_status
 
-class CLI(LineReceiver):
-  delimiter = '\n'
-  MAX_LENGTH = 1024 * 1024
-
-  def __init__(self, connect_function, label):
-    self.cli_connect = connect_function
-    self.label = label
-
-  def __str__(self):
-    return 'CLI(%s)' % self.label
-
-  def __repr__(self):
-    return str(self)
-
-  def connectionMade(self):
-    print("+++ connectionMade: %s" % repr(self))
-    if getattr(self, 'factory', None):
-      self.factory.resetDelay()
-    self.cli_receive = self.cli_connect(self)
-
-  def lineReceived(self, line):
-    print("+++ lineReceived(%s): %s" % (self.label, repr(line)))
-    if not self.cli_receive(line):
-      self.transport.loseConnection()
-
-  def connectionLost(self, reason):
-    self.cli_connect(None)
-
-  def lineLengthExceeded(self, line):
-    print("!!! Error: line length exceeded: %s" % repr(line))
-
-class CLIFactory(protocol.ReconnectingClientFactory):
-  def __init__(self, connect_function):
-    self.connect_function = connect_function
-
-  def buildProtocol(self, addr):
-    c = CLI(self.connect_function, 'rtgw')
-    c.factory = self
-    return c
-
-  def clientConnectionLost(self, connector, reason):
-    print("+++ tcp clientConnectionLost")
-    self.connect_function(None)
-    self.retry(connector)
-    #if reactor.running:
-    #  reactor.stop()
-
-  def clientConnectionFailed(self, connector, reason):
-    print("+++ tcp clientConnectionFailed")
-    self.connect_function(None)
-    self.retry(connector)
-
         
 if __name__=='__main__':
+    from xmlserver import xmlserver
+    from tcpserver import serverFactory
+    from tcpclient import clientFactory
+
     log.startLogging(sys.stdout)
     rtx=RTX()
     reactor.listenTCP(rtx.tcp_port, serverFactory(rtx))
     xmlsvr=xmlserver(rtx)
-
     xmlrpc.addIntrospection(xmlsvr)
     reactor.listenTCP(rtx.xmlrpc_port, server.Site(xmlsvr))
-
-    f = CLIFactory(rtx.gateway_connect)
-    api_hostname = environ['TXTRADER_API_HOST']
-    api_port = int(environ['TXTRADER_API_PORT'])
-    reactor.connectTCP(api_hostname, api_port, f)
-
+    reactor.connectTCP(rtx.api_hostname, rtx.api_port, clientFactory(rtx.gateway_connect, 'rtgw'))
     reactor.run()

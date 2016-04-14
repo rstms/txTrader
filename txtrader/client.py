@@ -41,16 +41,27 @@ class TimeoutTransport(xmlrpclib.Transport):
         self._connection[1].timeout = self.timeout
         return self._connection[1]
 
+class Config():
+  def __init__(self, label):
+    self.label = label.upper()
+
+  def get(self, key):
+    name = 'TXTRADER_%s_%s' % (self.label, key)
+    if not name in environ.keys():
+      name = 'TXTRADER_%s' % key
+    return environ[name] 
+
 class API():
   def __init__(self, server):
     self.server=server
-    self.hostname = environ['TXTRADER_HOST']
-    username = environ['TXTRADER_USERNAME']
-    password = environ['TXTRADER_PASSWORD']
-    self.port = environ['TXTRADER_XMLRPC_PORT']
-    self.account = environ['TXTRADER_API_ACCOUNT']
-    self.retry_limit = int(environ['TXTRADER_XMLRPC_RETRY_LIMIT'])
-    self.timeout = float(environ['TXTRADER_XMLRPC_TIMEOUT'])
+    self.config = Config(server)
+    self.hostname = self.config.get('HOST')
+    username = self.config.get('USERNAME')
+    password = self.config.get('PASSWORD')
+    self.port = self.config.get('XMLRPC_PORT')
+    self.account = self.config.get('API_ACCOUNT')
+    self.retry_limit = int(self.config.get('XMLRPC_RETRY_LIMIT'))
+    self.timeout = float(self.config.get('XMLRPC_TIMEOUT'))
     url='http://%s:%s@%s:%s' % (username, password, self.hostname, self.port)
     self.transport = TimeoutTransport(timeout=self.timeout)
     self.transport.user_agent = 'TxTrader/%s (by www.rtsms.net)' % version.__version__
@@ -242,8 +253,16 @@ class API():
     return self.call_with_retry('set_primary_exchange', args)
 
 if __name__=='__main__':
+  import json
   from sys import argv
+  flags=[]
+  while argv[1].startswith('-'):
+    flags.append(argv[1])
+    del(argv[1])
   server, command = argv[1:3]
   args = argv[3:]
-  print API(server).cmd(command, args)
-
+  ret = API(server).cmd(command, args)
+  if type(ret)==str or (not '-p' in flags):
+    print(ret)
+  else:
+    print(json.dumps(ret, sort_keys=True, indent=2, separators=(',', ': ')))
