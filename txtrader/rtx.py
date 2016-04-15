@@ -19,8 +19,6 @@ from uuid import uuid1
 import json
 import time
 
-from os import environ
-
 from client import Config
 
 DEFAULT_CALLBACK_TIMEOUT = 5

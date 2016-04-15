@@ -9,7 +9,7 @@ TXTRADER_PYTHON = /usr/local/lib/python2.7.11/bin/python
 TXTRADER_ENVDIR = /etc/txtrader
 TXTRADER_VENV = $(HOME)/txtrader-venv
 
-TXTRADER_MODE = rtx 
+TXTRADER_MODE = rtx
 
 TXTRADER_TEST_HOST = 127.0.0.1
 TXTRADER_TEST_PORT = 17496
@@ -17,7 +17,7 @@ TXTRADER_TEST_PORT = 17496
 TXTRADER_TEST_ACCOUNT = AUTO
 
 default:
-	@echo "\nQuick Start:\n\nmake build; sudo make -e TXTRADER_MODE=tws install; sudo make -e TXTRADER_MODE=rtx install\n"
+	@echo "\nQuick Start Commands:\n\nsudo make config; make build; sudo make -e TXTRADER_MODE=tws install; sudo make -e TXTRADER_MODE=rtx install\n"
 
 clean:
 	@echo "Cleaning up..."
@@ -49,6 +49,7 @@ config: .make-config
 	chown -R txtrader.txtrader $(TXTRADER_ENVDIR)
 	chmod 700 $(TXTRADER_ENVDIR)
 	chmod 600 $(TXTRADER_ENVDIR)/*
+	chmod 644 $(TXTRADER_ENVDIR)/TXTRADER_VENV
 	touch .make-config
 
 testconfig:
@@ -82,8 +83,11 @@ install: .make-venv
 	@echo "Installing txtrader.$(TXTRADER_MODE)..."
 	cp bin/txtrader /usr/local/bin
 	rm -rf /var/svc.d/txtrader.$(TXTRADER_MODE)
-	cp -r service/txtrader.$(TXTRADER_MODE) /var/svc.d
+	cp -rp service/txtrader.$(TXTRADER_MODE) /var/svc.d
 	touch /var/svc.d/txtrader.$(TXTRADER_MODE)/down
+	chown -R root.root /var/svc.d/txtrader.$(TXTRADER_MODE)
+	chown root.txtrader /var/svc.d/txtrader.$(TXTRADER_MODE)
+	chown root.txtrader /var/svc.d/txtrader.$(TXTRADER_MODE)/*.tac
 	update-service --add /var/svc.d/txtrader.$(TXTRADER_MODE)
 
 start:

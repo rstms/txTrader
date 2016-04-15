@@ -17,7 +17,7 @@ import sys, mx.DateTime, types, datetime
 import json
 import time
 
-from os import environ
+from client import Config
 
 DEFAULT_TWS_CALLBACK_TIMEOUT = 5
 
@@ -142,17 +142,18 @@ class TWS():
 
     def __init__(self):
         self.output('TWS init')
-        self.username = environ['TXTRADER_USERNAME']
-        self.password = environ['TXTRADER_PASSWORD']
-        self.xmlrpc_port = int(environ['TXTRADER_XMLRPC_PORT'])
-        self.tcp_port = int(environ['TXTRADER_TCP_PORT'])
-        self.callback_timeout = int(environ['TXTRADER_TWS_CALLBACK_TIMEOUT'])
+        self.channel = 'tws'
+        self.config = Config(self.channel)
+        self.username = self.config.get('USERNAME')
+        self.password = self.config.get('PASSWORD')
+        self.xmlrpc_port = int(self.config.get('XMLRPC_PORT'))
+        self.tcp_port = int(self.config.get('TCP_PORT'))
+        self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
         if not self.callback_timeout:
           self.callback_timeout = DEFAULT_TWS_CALLBACK_TIMEOUT
         self.output('callback_timeout=%d' % self.callback_timeout)
-        self.enable_ticker = bool(int(environ['TXTRADER_ENABLE_TICKER']))
+        self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
         self.label = 'TWS Gateway'
-        self.channel = 'tws'
         self.current_account=''
         self.clients=set([])
         self.orders={}
@@ -449,9 +450,9 @@ class TWS():
     
     def connect(self):
         self.update_connection_status('Connecting')
-        api_hostname = environ['TXTRADER_API_HOST']
-        api_port = int(environ['TXTRADER_API_PORT'])
-        api_client_id = int(environ['TXTRADER_API_CLIENT_ID'])
+        api_hostname = self.config.get('API_HOST')
+        api_port = int(self.config.get('API_PORT'))
+        api_client_id = int(self.config.get('API_CLIENT_ID'))
         self.output('Connnecting to TWS API at %s:%d with client id %d' % (api_hostname, api_port, api_client_id))
         self.tws_conn = Connection.create(host=api_hostname, port=api_port, clientId=api_client_id)
         self.tws_conn.registerAll(self.reply_handler)

@@ -56,3 +56,4 @@ target/
 # local customization
 service/down
 service/txtrader.pid
+.make-*
