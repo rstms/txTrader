@@ -24,4 +24,3 @@ setup(
   package_dir={'txtrader': 'txtrader'},
 )
 
-# TODO: add classifiers

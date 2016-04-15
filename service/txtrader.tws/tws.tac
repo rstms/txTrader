@@ -15,7 +15,7 @@ internet.TCPServer(api.xmlrpc_port, server.Site(xrs)).setServiceParent(msvc)
 
 internet.TCPServer(api.tcp_port, serverFactory(api)).setServiceParent(msvc)
 
-application = service.Application('txtrader')
+application = service.Application('txtrader.tws')
 
 msvc.setServiceParent(application)
 

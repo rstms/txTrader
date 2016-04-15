@@ -18,6 +18,6 @@ internet.TCPServer(api.tcp_port, serverFactory(api)).setServiceParent(msvc)
 
 internet.TCPClient(api.api_hostname, api.api_port, clientFactory(api.gateway_connect, 'rtgw')).setServiceParent(msvc)
 
-application = service.Application('txtrader')
+application = service.Application('txtrader.rtx')
 msvc.setServiceParent(application)
 
