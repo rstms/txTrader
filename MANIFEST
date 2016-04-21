@@ -11,8 +11,7 @@ txtrader/monitor.py
 txtrader/rtx.py
 txtrader/tcpclient.py
 txtrader/tcpserver.py
-txtrader/test-client.py
-txtrader/test-output.py
+txtrader/test-txtrader.py
 txtrader/tws.py
 txtrader/version.py
 txtrader/xmlserver.py

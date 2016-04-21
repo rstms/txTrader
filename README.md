@@ -31,8 +31,9 @@ TxTrader's server daemons depend on external libraries for each configured API:
    - http://partners.cqg.com/api-resources
 
  - RealTick
-   - planned enhancement
-
+   - uses RTGW Txtrader GateWay running under Linux
+   - consult your RealTick customer service agent for API details
+    
 
 Server Configuration
 --------------------
@@ -56,6 +57,10 @@ Installation
 ------------
 ```
 curl --location https://github.com/rstms/TxTrader/raw/master/bootstrap.sh | sudo sh
+```
+For the command line tool, add the current user to the 'txtrader' group:
+```
+sudo usermod -a -G txtrader USERNAME
 ```
 
 XMLRPC Server
@@ -95,12 +100,14 @@ global_cancel()
 
 limit_order('symbol', price, quantity) => {'field':, data, ...}
 
-        Submit a limit order, returning dict containing new order fields
+        Submit a limit order, returning dict containing new order fields (see market_order)
         
 
 market_order('symbol', quantity) => {'field':, data, ...}
 
         Submit a market order, returning dict containing new order fields
+        dict will include 'permid' field containing permanent order id string
+        dict will include 'status' field containing latest order status string
         
 
 query_accounts() => ['account_name', ...]
@@ -161,13 +168,12 @@ status() => 'status string'
 
 stop_order('symbol', price, quantity) => {'field':, data, ...}
 
-        Submit a stop order, returning dict containing new order fields
+        Submit a stop order, returning dict containing new order fields (see market_order)
         
 
-stoplimit_order 
-stop_order('symbol', stop_price, limit_price, quantity) => {'field':, data, ...}
+stoplimit_order('symbol', stop_price, limit_price, quantity) => {'field':, data, ...}
 
-        Submit a stop-limit order, returning dict containing new order fields
+        Submit a stop-limit order, returning dict containing new order fields (see market_order)
         
 
 system.listMethods [['array']]

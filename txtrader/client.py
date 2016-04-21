@@ -19,6 +19,7 @@ import traceback
 from sys import stderr
 from os import environ
 import types
+from time import sleep
 
 import version
 
@@ -48,7 +49,10 @@ class Config():
   def get(self, key):
     name = 'TXTRADER_%s_%s' % (self.label, key)
     if not name in environ.keys():
+      #print('Config.get(%s): %s not found in %s' % (key, name, environ.keys()))
       name = 'TXTRADER_%s' % key
+    if not name in environ.keys():
+      print('ERROR: Config.get(%s) failed' % key)
     return environ[name] 
 
 class API():
@@ -132,6 +136,7 @@ class API():
       except socket.error, ex:
         if ex.errno == errno.ECONNREFUSED:
           self.retry_or_fail(tries, ex)
+          sleep(1)
         else:
           self.process_error(ex)
       except Exception, ex:
@@ -147,6 +152,7 @@ class API():
 
   def process_error(self, ex):
     stderr.write('Error: API(%s)@%s:%s call failed: %s\n' % (self.server, self.hostname, self.port, traceback.format_exc()))
+    stderr.flush()
     raise ex
 
   def status(self, *args):

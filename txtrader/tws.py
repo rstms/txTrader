@@ -592,6 +592,9 @@ class TWS():
         id = self.next_order_id
         self.next_order_id += 1
         return id
+ 
+    def request_accounts(self, callback):
+        TWS_Callback(self, 0, 'request-accounts', callback).complete(self.accounts)
         
     def request_positions(self, callback):
         if not self.position_callbacks:

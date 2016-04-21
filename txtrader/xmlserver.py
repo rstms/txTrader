@@ -112,7 +112,10 @@ class authorized_xmlserver(XMLRPC):
         Return array of account names
         """
         self.output('xmlrpc_query_accounts()')
-        return self.api.accounts
+        ret = defer.Deferred()
+        ret.addErrback(self.errback_xmlrpc)
+        self.api.request_accounts(ret)
+        return ret
     
     def xmlrpc_set_account(self, account):
         """set_account('account')
