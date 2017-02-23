@@ -1,6 +1,14 @@
 txTrader - Twisted Trading API Controller 
 =========================================
 
+Overview - what is this thing, and what does it do?
+---------------------------------------------------
+- Cross-Platform securities trading API management engine   
+- Encapsulates the interaction with the broker's API 
+- Provides a trader's eye view of the interaction with the trading software API.    
+- Manages connection maintenance and communication details of the order management / trade execution transaction.   
+- Frees trading software from timing and architectural constraints imposed by the execution API.
+
 
 Description
 -----------
