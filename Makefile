@@ -5,7 +5,7 @@ THIS_FILE := $(lastword $(MAKEFILE_LIST))
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp
 REQUIRED_PIP = Twisted egenix-mx-base pudb ./dist/*.tar.gz ~/IbPy/dist/*.tar.gz
 
-TXTRADER_PYTHON = /usr/local/lib/python2.7.11/bin/python
+TXTRADER_PYTHON = /usr/bin/python2
 TXTRADER_ENVDIR = /etc/txtrader
 TXTRADER_VENV = $(HOME)/txtrader-venv
 
