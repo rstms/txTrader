@@ -104,7 +104,7 @@ class API():
     if cmd in self.cmdmap.keys():
       func, require_account, parms = self.cmdmap[cmd]
       if require_account:
-	if not self.set_account(self.account):
+        if not self.set_account(self.account):
       	  raise Exception('Error: set_account required')
       return func(*args)
     else:
