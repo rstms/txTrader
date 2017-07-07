@@ -60,7 +60,7 @@ RUN \
   sudo make config && \
   make build && \
   sudo make -e TXTRADER_MODE=tws install && \
-  sudo make start-tws \
+  sudo make start \
   '
 
 COPY keys/github-rsstools-deploy /root/.ssh/github-rsstools-deploy
