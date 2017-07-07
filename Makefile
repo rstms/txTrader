@@ -82,9 +82,9 @@ venv:	.make_venv
 	for package in $(REQUIRED_PIP); do \
           echo -n "Installing package $$package into virtual env..."; pip install $$package || false;\
         done;
-	touch .make-venv
+	touch .make_venv
 
-install: .make-venv config
+install: .make_venv config
 	@echo "Installing txtrader..."
 	cp bin/txtrader /usr/local/bin
 	rm -rf /var/svc.d/txtrader
