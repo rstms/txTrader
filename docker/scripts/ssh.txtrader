@@ -1,0 +1,17 @@
+#!/bin/sh
+nargs=$#
+args=
+while [ $nargs -gt 0 ]
+do
+  args="\"${@:$nargs:1}\" $args"
+  nargs=`expr $nargs - 1`
+done
+NAME=$(basename $0)
+NAME=${NAME#ssh.}
+IP=$(sudo docker network inspect bridge | jq -r ".[0].Containers|.[] |  select(.Name == \"$NAME\")| .IPv4Address | split(\"/\")[0]")
+#eval exec ssh root@$IP $args
+if [ -n "$IP" ]; then
+  eval exec ssh root@$IP $args
+else
+  echo >&2 "ERROR: docker IP for host $NAME not found"
+fi

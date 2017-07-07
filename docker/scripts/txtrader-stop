@@ -1,0 +1,2 @@
+#!/bin/bash
+sudo su -l ec2-user -c "cd ~/src/icecap-genotick/txtrader && make stop"
