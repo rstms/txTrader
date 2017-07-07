@@ -19,7 +19,7 @@ from uuid import uuid1
 import json
 import time
 
-from client import Config
+from config import Config
 
 DEFAULT_CALLBACK_TIMEOUT = 5
 

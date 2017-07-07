@@ -5,26 +5,26 @@ THIS_FILE := $(lastword $(MAKEFILE_LIST))
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp
 REQUIRED_PIP = Twisted egenix-mx-base pudb ./dist/*.tar.gz ../IbPy/dist/*.tar.gz
 
-TXTRADER_PYTHON = /usr/bin/python
-TXTRADER_ENVDIR = /etc/txtrader
-TXTRADER_VENV = $(HOME)/txtrader-venv
+PYTHON = /usr/bin/python
+ENVDIR = /etc/txtrader
+VENV = $(HOME)/venv/txtrader
 
-TXTRADER_MODE = rtx
+# mode can be: tws cqg rtx
+MODE=tws
 
 # set account to AUTO for make testconfig to auto-set demo account
-TXTRADER_TEST_MODE = RTX
-TXTRADER_TEST_HOST = 127.0.0.1
-TXTRADER_TEST_PORT = 51070
-TXTRADER_TEST_ACCOUNT = AUTO
+TEST_HOST = 127.0.0.1
+TEST_PORT = 7497 
+TEST_ACCOUNT = AUTO
 
 default:
-	@echo "\nQuick Start Commands:\n\nsudo make config; make build; sudo make -e TXTRADER_MODE=tws install; sudo make -e TXTRADER_MODE=rtx install\n"
+	@echo "\nQuick Start Commands:\n\nsudo make config; make build; sudo make install; sudo make install\n"
 
 clean:
 	@echo "Cleaning up..."
 	rm -f txtrader/*.pyc
 	rm -rf build
-	rm -rf $(TXTRADER_VENV)
+	rm -rf $(VENV)
 	rm -f .make-*
 
 build:  .make-build
@@ -40,103 +40,82 @@ config: .make-config
 .make-config:
 	@echo "Configuring..."
 	@getent >/dev/null passwd txtrader && echo "User txtrader exists." || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader
-	@echo $(TXTRADER_VENV)>etc/txtrader/TXTRADER_VENV
+	@echo $(VENV)>etc/txtrader/TXTRADER_VENV
 	@echo txtrader>etc/txtrader/TXTRADER_DAEMON_USER
 	@for package in $(REQUIRED_PACKAGES); do \
 	  dpkg-query >/dev/null -l $$package && echo "verified package $$package" || break;\
 	done;
 	mkdir -p /etc/txtrader
-	chmod 770 $(TXTRADER_ENVDIR)
-	cp -r etc/txtrader/* $(TXTRADER_ENVDIR)
-	chown -R txtrader.txtrader $(TXTRADER_ENVDIR)
-	chmod 640 $(TXTRADER_ENVDIR)/*
+	chmod 770 $(ENVDIR)
+	cp -r etc/txtrader/* $(ENVDIR)
+	chown -R txtrader.txtrader $(ENVDIR)
+	chmod 640 $(ENVDIR)/*
 	touch .make-config
 
 testconfig:
 	@echo "Configuring test API..."
 	$(MAKE) start
-	sudo sh -c "echo $(TXTRADER_TEST_PORT)>$(TXTRADER_ENVDIR)/TXTRADER_$(TXTRADER_TEST_MODE)_API_PORT"
-	sudo sh -c "echo $(TXTRADER_TEST_ACCOUNT)>$(TXTRADER_ENVDIR)/TXTRADER_$(TXTRADER_TEST_MODE)_API_ACCOUNT"
+	sudo sh -c "echo $(TEST_PORT)>$(ENVDIR)/TXTRADER_API_PORT"
+	sudo sh -c "echo $(TEST_ACCOUNT)>$(ENVDIR)/TXTRADER_API_ACCOUNT"
 	@echo -n "Restarting service..."
-	@sudo svc -t /etc/service/txtrader.$(TXTRADER_MODE)
-	@while [ "$$(txtrader 2>/dev/null rtx status)" != "Connected" ]; do echo -n .;sleep 1; done;
-	@txtrader $(TXTRADER_MODE) status
-	@if [ "$(TXTRADER_TEST_ACCOUNT)" = "AUTO" ]; then\
+	@sudo svc -t /etc/service/txtrader
+	@while [ "$$(txtrader 2>/dev/null $(MODE) status)" != "Connected" ]; do echo -n .;sleep 1; done;
+	@txtrader $(MODE) status
+	@if [ "$(TEST_ACCOUNT)" = "AUTO" ]; then\
           echo -n "Getting account...";\
-	  while [ "$$(txtrader 2>/dev/null rtx query_accounts)" = "[]" ]; do echo -n .;sleep 1; done;\
+	  while [ "$$(txtrader 2>/dev/null $(MODE) query_accounts)" = "[]" ]; do echo -n .;sleep 1; done;\
 	  echo OK;\
-	  export ACCOUNT="`txtrader $(TXTRADER_MODE) query_accounts | tr -d \"[]\'\" | cut -d, -f1`";\
+	  export ACCOUNT="`txtrader $(MODE) query_accounts | tr -d \"[]\'\" | cut -d, -f1`";\
 	else\
-	  export ACCOUNT="$(TXTRADER_TEST_ACCOUNT)";\
+	  export ACCOUNT="$(TEST_ACCOUNT)";\
 	fi;\
 	echo "Setting test ACCOUNT=$$ACCOUNT";\
-	sudo sh -c "echo $$ACCOUNT>$(TXTRADER_ENVDIR)/TXTRADER_$(TXTRADER_TEST_MODE)_API_ACCOUNT";\
+	sudo sh -c "echo $$ACCOUNT>$(ENVDIR)/TXTRADER_API_ACCOUNT";\
 
-.make-venv: .make-build
-	rm -rf $(TXTRADER_VENV)
-	virtualenv -p $(TXTRADER_PYTHON) $(TXTRADER_VENV)
-	. $(TXTRADER_VENV)/bin/activate; \
+venv:	.make_venv
+
+.make_venv:
+	@echo "(re)configure venv"
+	rm -rf $(VENV)
+	virtualenv -p $(PYTHON) $(VENV)
+	. $(VENV)/bin/activate; \
 	for package in $(REQUIRED_PIP); do \
           echo -n "Installing package $$package into virtual env..."; pip install $$package || false;\
         done;
 	touch .make-venv
 
-install-tws:
-	$(MAKE) TXTRADER_MODE=tws install
-
-install-rtx:
-	$(MAKE) TXTRADER_MODE=rtx install
-
 install: .make-venv config
-	@echo "Installing txtrader.$(TXTRADER_MODE)..."
+	@echo "Installing txtrader..."
 	cp bin/txtrader /usr/local/bin
-	rm -rf /var/svc.d/txtrader.$(TXTRADER_MODE)
-	cp -rp service/txtrader.$(TXTRADER_MODE) /var/svc.d
-	touch /var/svc.d/txtrader.$(TXTRADER_MODE)/down
-	chown -R root.root /var/svc.d/txtrader.$(TXTRADER_MODE)
-	chown root.txtrader /var/svc.d/txtrader.$(TXTRADER_MODE)
-	chown root.txtrader /var/svc.d/txtrader.$(TXTRADER_MODE)/*.tac
-	update-service --add /var/svc.d/txtrader.$(TXTRADER_MODE)
-
-start-tws:
-	$(MAKE) TXTRADER_MODE=tws start 
-
-start-rtx:
-	$(MAKE) TXTRADER_MODE=rtx start 
+	rm -rf /var/svc.d/txtrader
+	cp -rp service/txtrader /var/svc.d
+	touch /var/svc.d/txtrader/down
+	chown -R root.root /var/svc.d/txtrader
+	chown root.txtrader /var/svc.d/txtrader
+	chown root.txtrader /var/svc.d/txtrader/*.tac
+	update-service --add /var/svc.d/txtrader
 
 start:
 	@echo "Starting Service..."
-	sudo rm -f /etc/service/txtrader.$(TXTRADER_MODE)/down
-	sudo svc -u /etc/service/txtrader.$(TXTRADER_MODE)
-
-stop-tws:
-	$(MAKE) TXTRADER_MODE=tws stop
-
-stop-rtx:
-	$(MAKE) TXTRADER_MODE=rtx stop
+	sudo rm -f /etc/service/txtrader/down
+	sudo svc -u /etc/service/txtrader
 
 stop:
 	@echo "Stopping Service..."
-	sudo touch /etc/service/txtrader.$(TXTRADER_MODE)/down
-	sudo svc -d /etc/service/txtrader.$(TXTRADER_MODE)
+	sudo touch /etc/service/txtrader/down
+	sudo svc -d /etc/service/txtrader
 
 restart: stop start
 	@echo "Restarting Service..."
 
-uninstall-tws:
-	$(MAKE) TXTRADER_MODE=tws uninstall
-		
-uninstall-rtx:
-	$(MAKE) TXTRADER_MODE=rtx uninstall
-		
 uninstall:
 	@echo "Uninstalling..."
-	if [ -e /etc/service/txtrader.$(TXTRADER_MODE) ]; then\
-	  svc -d /etc/service/txtrader.$(TXTRADER_MODE);\
-	  svc -d /etc/service/txtrader.$(TXTRADER_MODE)/log;\
-	  update-service --remove /var/svc.d/txtrader.$(TXTRADER_MODE);\
+	if [ -e /etc/service/txtrader ]; then\
+	  svc -d /etc/service/txtrader;\
+	  svc -d /etc/service/txtrader/log;\
+	  update-service --remove /var/svc.d/txtrader;\
 	fi
-	rm -rf /var/svc.d/txtrader.$(TXTRADER_MODE)
+	rm -rf /var/svc.d/txtrader
 	cat files.txt | xargs rm -f
 	rm -f /usr/local/bin/txtrader
 
@@ -150,5 +129,5 @@ test: $(TESTS)
 	@echo "Testing..."
 	cd txtrader; envdir ../etc/txtrader py.test $(TPARM) $(notdir $^)
 
-testserver: 
-	envdir etc/txtrader txtrader/rtx.py
+run: 
+	envdir etc/txtrader txtrader/$(MODE).py

@@ -11,7 +11,7 @@ build:
 start:
 	@if [ -z "$$(docker ps -aqf Name=txtrader)" ]; then \
 	  HOST_IP=`ifconfig eth0 | awk '/inet addr/{print $$2}' | awk -F: '{print $$2}'` && \
-	  docker run --restart always --detach -p 50080:50080 -p 50090:50090 --add-host="ibgw:$$HOST_IP" --name=txtrader txtrader:latest && \
+	  docker run --restart always --detach -p 50070:50070 -p 50090:50090 --add-host="ibgw:$$HOST_IP" --name=txtrader txtrader:latest && \
 	  docker ps;\
 	else \
 	  echo "Already started."; \

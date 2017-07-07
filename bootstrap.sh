@@ -9,6 +9,6 @@ cd
 curl --location -o- https://github.com/rstms/txTrader/tarball/$TXTRADER_VERSION | tar zxfv -
 mv rstms-txTrader-* txTrader
 cd txTrader
-[ -n "$TXTRADER_MODE" ] || TXTRADER_MODE=tws
+[ -n "$MODE" ] || MODE=tws
 make build
-sudo make -e TXTRADER_MODE=$TXTRADER_MODE install
+sudo make -e MODE=$MODE install

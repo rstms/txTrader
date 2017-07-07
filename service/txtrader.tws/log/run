@@ -1,2 +1,0 @@
-#!/bin/sh
-exec multilog t s10000000 /var/log/txtrader.tws

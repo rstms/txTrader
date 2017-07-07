@@ -12,11 +12,11 @@
 """
 
 VERSION_MAJOR=1
-VERSION_MINOR=3
+VERSION_MINOR=4
 VERSION_PATCH=0
-BUILD=1303
-DATE='2017-06-08'
-TIME='18:35:42'
+BUILD=1305
+DATE='2017-07-07'
+TIME='12:10:14'
 __version__='%s.%s.%s' % (VERSION_MAJOR,VERSION_MINOR,VERSION_PATCH)
 __date__='%s %s' % (DATE,TIME)
 __label__='TxTrader Securities Trading API Controller'

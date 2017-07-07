@@ -11,4 +11,4 @@
 
 """
 
-__all__=['version', 'tcpserver', 'xmlserver', 'tws', 'cqg', 'client', 'monitor']
+__all__=['version', 'tcpserver', 'webserver', 'tws', 'cqg', 'client', 'monitor']

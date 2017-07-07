@@ -17,7 +17,7 @@ import sys, mx.DateTime, types, datetime
 import json
 import time
 
-from client import Config
+from config import Config
 
 DEFAULT_TWS_CALLBACK_TIMEOUT = 5
 
@@ -31,8 +31,9 @@ from twisted.web import xmlrpc, server
 from twisted.protocols import basic
 from socket import gethostname
 
-from xmlserver import xmlserver
+#from xmlserver import xmlserver
 from tcpserver import serverFactory
+from webserver import webServerFactory
 
 from ib.ext.Contract import Contract
 from ib.ext.TickType import TickType
@@ -123,6 +124,7 @@ class TWS_Callback():
         if not self.done:
             if self.callable.callback.__name__=='write':
                 results='%s.%s: %s\n' % (self.tws.channel, self.label, json.dumps(results))
+            print('TWS_Callback.complete(%s)' % repr(results))
             self.callable.callback(results)
             self.done=True
         else:
@@ -146,7 +148,7 @@ class TWS():
         self.config = Config(self.channel)
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
-        self.xmlrpc_port = int(self.config.get('XMLRPC_PORT'))
+        self.http_port = int(self.config.get('HTTP_PORT'))
         self.tcp_port = int(self.config.get('TCP_PORT'))
         self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
         if not self.callback_timeout:
@@ -263,7 +265,7 @@ class TWS():
             oldstatus=json.dumps(m)
         else:
             oldstatus=''
-        m['permid']=msg.permId
+        m['permid']=str(msg.permId)
         m['id']=msg.orderId
         m['status']=msg.status
         m['filled']=msg.filled
@@ -401,7 +403,7 @@ class TWS():
 
     def reply_handler(self, msg):
         """Handles of server replies"""
-        #self.output('message: %s %s ' % (repr(msg.typeName), msg))
+        self.output('message: %s %s ' % (repr(msg.typeName), msg))
         if msg.typeName in self.handlers.keys():
             self.handlers[msg.typeName](msg)
         else:
@@ -752,8 +754,5 @@ if __name__=='__main__':
     log.startLogging(sys.stdout)
     tws=TWS()
     reactor.listenTCP(tws.tcp_port, serverFactory(tws))
-    xmlsvr=xmlserver(tws)
-
-    xmlrpc.addIntrospection(xmlsvr)
-    reactor.listenTCP(tws.xmlrpc_port, server.Site(xmlsvr))
+    reactor.listenTCP(tws.http_port, webServerFactory(tws))
     reactor.run()

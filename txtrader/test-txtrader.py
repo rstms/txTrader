@@ -23,7 +23,7 @@ class Server():
   def __init__(self):
     subprocess.call('truncate --size 0 test.log', shell=True)
     self.logfile = open('test.log', 'a')
-    self.process = subprocess.Popen('. ../../txtrader-venv/bin/activate; exec envdir ../etc/txtrader python rtx.py', stdout=self.logfile, shell=True)
+    self.process = subprocess.Popen('. ../../../venv/txtrader/bin/activate; exec envdir ../etc/txtrader python tws.py', stdout=self.logfile, shell=True)
     assert self.process
     print('%s created as pid %d' % (repr(self.process), self.process.pid))
 
