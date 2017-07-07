@@ -56,10 +56,10 @@ RUN \
   mv rstms-txTrader-* txTrader && \
   cd txTrader && \
   echo ibgw >etc/txtrader/TXTRADER_API_HOST && \
-  echo 4001 >etc/txtrader/TXTRADER_TWS_API_PORT && \
+  echo 4001 >etc/txtrader/TXTRADER_API_PORT && \
   sudo make config && \
   make build && \
-  sudo make -e TXTRADER_MODE=tws install && \
+  sudo make -e install && \
   sudo make start \
   '
 
