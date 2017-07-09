@@ -72,9 +72,9 @@ testconfig:
 	echo "Setting test ACCOUNT=$$ACCOUNT";\
 	sudo sh -c "echo $$ACCOUNT>$(ENVDIR)/TXTRADER_API_ACCOUNT";\
 
-venv:	.make_venv
+venv:	.make-venv
 
-.make_venv:
+.make-venv:
 	@echo "(re)configure venv"
 	rm -rf $(VENV)
 	virtualenv -p $(PYTHON) $(VENV)
@@ -82,9 +82,9 @@ venv:	.make_venv
 	for package in $(REQUIRED_PIP); do \
           echo -n "Installing package $$package into virtual env..."; pip install $$package || false;\
         done;
-	touch .make_venv
+	touch .make-venv
 
-install: .make_venv config
+install: .make-venv config
 	@echo "Installing txtrader..."
 	cp bin/txtrader /usr/local/bin
 	rm -rf /var/svc.d/txtrader
@@ -126,8 +126,10 @@ TPARM := -vvvs
 .PHONY: test 
 
 test: $(TESTS)
-	@echo "Testing..."
-	cd txtrader; envdir ../etc/txtrader py.test $(TPARM) $(notdir $^)
+	@echo Testing...
+	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader py.test $(TPARM) $(notdir $^)
+
 
 run: 
-	envdir etc/txtrader txtrader/$(MODE).py
+	@echo Running...
+	. $(VENV)/bin/activate && envdir etc/txtrader txtrader/$(MODE).py

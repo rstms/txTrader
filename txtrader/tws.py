@@ -23,6 +23,8 @@ DEFAULT_TWS_CALLBACK_TIMEOUT = 5
 
 SHUTDOWN_ON_TWS_DISCONNECT = True
 
+LOG_TWS_MESSAGES = False
+
 from twisted.python import log
 from twisted.internet.protocol import Factory, Protocol
 from twisted.internet import reactor, defer
@@ -124,11 +126,12 @@ class TWS_Callback():
         if not self.done:
             if self.callable.callback.__name__=='write':
                 results='%s.%s: %s\n' % (self.tws.channel, self.label, json.dumps(results))
-            print('TWS_Callback.complete(%s)' % repr(results))
+            self.tws.output('TWS_Callback.complete(%s)' % repr(results))
             self.callable.callback(results)
+	    self.callable.callback=None
             self.done=True
         else:
-            self.tws.output('error: callback: %s was already done!' % self)
+            self.tws.output('error: callback: %s was already done! results=%s' % (self, results))
             
     def check_expire(self):
         if not self.done:
@@ -155,6 +158,7 @@ class TWS():
           self.callback_timeout = DEFAULT_TWS_CALLBACK_TIMEOUT
         self.output('callback_timeout=%d' % self.callback_timeout)
         self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
+	self.output_second_ticks = bool(int(self.config.get('ENABLE_SECONDS_TICK')))
         self.label = 'TWS Gateway'
         self.current_account=''
         self.clients=set([])
@@ -203,11 +207,17 @@ class TWS():
         self.primary_exchange_map={}
         self.tws_conn=None
         repeater = LoopingCall(self.EverySecond)
+        # start repeater on even RTC second
+	t = time.time()
+        t = 1-(t - int(t))
+	time.sleep(t)
         repeater.start(1)
 
     def output(self, msg):
-        sys.stderr.write(msg+'\n')
-        sys.stderr.flush()
+        if 'error' in msg.lower():
+            log.err(msg)
+        else:
+	    log.msg(msg)
         
     def open_client(self, client):
         self.clients.add(client)
@@ -363,8 +373,15 @@ class TWS():
         if msg.id is None and msg.errorCode is None:
             return
         self.LastError = msg.errorCode
-        self.output('error: %s' % msg)
+
         result={'status':'Error','id':msg.id,'errorCode':msg.errorCode,'errorMsg':msg.errorMsg}
+
+        # don't  report errors for status messages that aren't error conditions
+        # 2104: Market data farm connection is OK
+        # 2106: HMDS data farm connection is OK
+        # 2100: client has been unsubscribed from account data
+        if not msg.errorCode in [ 2104, 2106, 2100 ]:
+            self.output('error: %s' % result)
 
         for cb in self.order_callbacks:
             if str(cb.id) == str(msg.id):
@@ -403,7 +420,9 @@ class TWS():
 
     def reply_handler(self, msg):
         """Handles of server replies"""
-        self.output('message: %s %s ' % (repr(msg.typeName), msg))
+        if LOG_TWS_MESSAGES:
+            self.output('message: %s %s ' % (repr(msg.typeName), msg))
+
         if msg.typeName in self.handlers.keys():
             self.handlers[msg.typeName](msg)
         else:
@@ -411,9 +430,9 @@ class TWS():
             
     def handle_time(self, msg):
         t = time.localtime(msg.time)
-        if t[4] != self.last_minute:
+        if t[4] != self.last_minute or self.output_second_ticks:
             self.last_minute = t[4]
-            self.WriteAllClients('time: %s' % time.strftime('%Y-%m-%d %H:%M:00', t))
+            self.WriteAllClients('time: %s' % time.strftime('%Y-%m-%d %H:%M:%S', t))
       
     def create_contract(self, symbol, sec_type, exch, prim_exch, curr):
         """Create a Contract object defining what will
@@ -529,9 +548,9 @@ class TWS():
             return True     
           
     def handle_tick_size(self, msg):
-        if self.enable_ticker:
-          self.output('%s %d %s %d' % (repr(msg), msg.field, TickType().getField(msg.field), msg.size))
         symbol = self.symbols_by_id[msg.tickerId]
+        #if self.enable_ticker:
+        #  self.output('%s %s %d %s %d' % (repr(msg), symbol, msg.field, TickType().getField(msg.field), msg.size))
         if msg.field==0: # bid_size
             symbol.bid_size=msg.size
             if self.enable_ticker:
@@ -549,10 +568,10 @@ class TWS():
 
     def handle_tick_price(self, msg):
         for cb in self.addsymbol_callbacks:
-            if str(cb.id.ticker_id) == str(msg.tickerId):
+            if str(cb.id.ticker_id) == str(msg.tickerId) and not cb.done:
                 cb.complete(True)
-        if self.enable_ticker:
-            self.output('%s %d %s %s' % (repr(msg), msg.field, TickType().getField(msg.field), msg.price))
+        #if self.enable_ticker:
+        #    self.output('%s %d %s %s' % (repr(msg), msg.field, TickType().getField(msg.field), msg.price))
         symbol = self.symbols_by_id[msg.tickerId]
         if msg.field==1: # bid
             symbol.bid=msg.price
@@ -568,8 +587,9 @@ class TWS():
             symbol.close=msg.price
               
     def handle_tick_string(self, msg):
-        if self.enable_ticker:
-            self.output('%s %d %s %s' % (repr(msg), msg.tickType, TickType().getField(msg.tickType), msg.value))
+	pass
+        #if self.enable_ticker:
+        #    self.output('%s %d %s %s' % (repr(msg), msg.tickType, TickType().getField(msg.tickType), msg.value))
         
     def handle_next_valid_id(self, msg):
         self.next_order_id = msg.orderId

@@ -299,9 +299,8 @@ class Leaf(Resource):
         request.finish() 
         
     def api_error(self, failure):
-        self.output('ERROR: API errback: %s' % repr(failure))
+        self.root.output('ERROR: API errback: %s' % repr(failure))
         return failure
-
 
 def webServerFactory(api):
     return Site(webserver(api).root)
