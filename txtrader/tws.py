@@ -159,6 +159,7 @@ class TWS():
         self.output('callback_timeout=%d' % self.callback_timeout)
         self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
 	self.output_second_ticks = bool(int(self.config.get('ENABLE_SECONDS_TICK')))
+	self.suppress_error_codes = [int(c) for c in self.config.get('SUPPRESS_ERROR_CODES').split(',')]
         self.label = 'TWS Gateway'
         self.current_account=''
         self.clients=set([])
@@ -278,6 +279,8 @@ class TWS():
         m['permid']=str(msg.permId)
         m['id']=msg.orderId
         m['status']=msg.status
+	if msg.status == 'Filled' and 'submit_time' in m and not 'fill_time' in m:
+            m['fill_time'] = time.time()
         m['filled']=msg.filled
         m['remaining']=msg.remaining
         m['avgfillprice']=msg.avgFillPrice
@@ -335,15 +338,16 @@ class TWS():
 
     def set_account(self, account_name, callback):
         if account_name in self.accounts:
-            self.current_account = account_name
-            msg = 'current account set to %s' % account_name
-            self.output(msg)
-            ret=True
+            if account_name != self.current_account:
+                self.current_account = account_name
+                msg = 'current account set to %s' % account_name
+                self.output(msg)
+                self.WriteAllClients('current-account: %s' % self.current_account)
+            ret = True
         else:
             msg = 'account %s not found' % account_name
             self.output('Error: set_account(): %s' % msg)
             ret=False
-        self.WriteAllClients('current-account: %s' % self.current_account)
         if callback:
             TWS_Callback(self, 0, 'current-account', callback).complete(ret)
         else:
@@ -374,14 +378,14 @@ class TWS():
             return
         self.LastError = msg.errorCode
 
-        result={'status':'Error','id':msg.id,'errorCode':msg.errorCode,'errorMsg':msg.errorMsg}
+        if 2100 <= msg.errorCode <= 2110 or msg.errorCode == 2137:
+            status = 'Warning'
+        else:
+            status = 'Error'
 
-        # don't  report errors for status messages that aren't error conditions
-        # 2104: Market data farm connection is OK
-        # 2106: HMDS data farm connection is OK
-        # 2100: client has been unsubscribed from account data
-        if not msg.errorCode in [ 2104, 2106, 2100 ]:
-            self.output('error: %s' % result)
+        result={'status':status,'id':msg.id,'code':msg.errorCode,'msg':msg.errorMsg}
+	
+        self.output('%s: %s' % (status.lower(), result))
 
         for cb in self.order_callbacks:
             if str(cb.id) == str(msg.id):
@@ -400,7 +404,7 @@ class TWS():
         order = self.find_order_with_id(str(msg.id))
         if order:
             order['previous_status']=order['status']
-            order['status']='Error'
+            order['status']=status
             order['errorCode']=msg.errorCode
             order['errorMsg']=msg.errorMsg
             self.send_order_status(order)
@@ -410,7 +414,8 @@ class TWS():
         elif msg.errorCode in [1101, 1102, 2104]:
             self.update_connection_status('Up')
 
-        self.WriteAllClients('error: %s' % msg)
+        if not msg.errorCode in self.suppress_error_codes:
+            self.WriteAllClients('%s: %s' % (status.lower(), msg))
 
     def find_order_with_id(self, id):
         for order in self.orders.values():
@@ -501,6 +506,7 @@ class TWS():
             status='Initialized'
             self.pending_orders[str(order_id)]={}
             self.pending_orders[str(order_id)]['status']=status
+            self.pending_orders[str(order_id)]['submit_time'] = time.time()
             self.output('created pending order %s' % str(order_id))
             contract = self.create_contract(symbol, 'STK', 'SMART', 'SMART', 'USD')
             if quantity > 0:
