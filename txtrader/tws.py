@@ -774,9 +774,9 @@ class TWS():
         cb = TWS_Callback(self, id, 'bardata', callback, 30)
         contract = self.create_contract(symbol, 'STK', 'SMART', 'SMART', 'USD')
         if type(bar_start) != types.IntType:
-            bar_start = datetime.datetime.strptime(bar_start, '%Y%m%d %H:%M:%S')
+            bar_start = datetime.datetime.strptime(bar_start, '%Y-%m-%d %H:%M:%S')
         if type(bar_end) != types.IntType:
-            bar_end = datetime.datetime.strptime(bar_end, '%Y%m%d %H:%M:%S')
+            bar_end = datetime.datetime.strptime(bar_end, '%Y-%m-%d %H:%M:%S')
         # try:
         if 1 == 1:
             endDateTime = bar_end.strftime('%Y%m%d %H:%M:%S')
