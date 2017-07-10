@@ -35,6 +35,9 @@ class webserver(object):
             self.root.putChild(route, Leaf(
                 self, getattr(self, 'json_%s' % route)))
 
+    def render(self, d, data):
+        d.callback(json.dumps(data))
+
     def json_shutdown(self, args, d):
         """shutdown() 
 
@@ -42,14 +45,14 @@ class webserver(object):
         """
         # self.output('shutdown()')
         reactor.callLater(1, reactor.stop)
-        d.callback('shutdown requested')
+        self.render(d, 'shutdown requested')
 
     def json_status(self, args, d):
         """status() => 'status string'
 
         return string describing current API connection status
         """
-        d.callback(self.api.query_connection_status())
+        self.render(d, self.api.query_connection_status())
 
     def json_uptime(self, args, d):
         """uptime() => 'uptime string'
@@ -57,8 +60,7 @@ class webserver(object):
         Return string showing start time and elapsed time for current server instance
         """
         uptime = datetime.datetime.now() - self.started
-        d.callback('started %s (elapsed %s)' % (self.started.strftime(
-            '%Y-%m-%d %H:%M:%S'), uptime.strftime('%H:%M:%S')))
+        self.render(d, 'started %s (elapsed %s)' % (self.started.strftime('%Y-%m-%d %H:%M:%S'), str(uptime)))
 
     def json_version(self, args, d):
         """version() => 'version string'
@@ -69,7 +71,7 @@ class webserver(object):
         ret['txtrader'] = VERSON
         ret['python'] = sys.version
         #ret['pip'] = check_output('pip list', shell=True)
-        d.callback(ret)
+        self.render(d, ret)
 
     def json_add_symbol(self, args, d):
         """add_symbol('symbol')
@@ -85,14 +87,14 @@ class webserver(object):
         Delete subscription to a symbol for price updates and order entry
         """
         symbol = str(args['symbol']).upper()
-        d.callback(self.api.symbol_disable(symbol, self))
+        self.render(d, self.api.symbol_disable(symbol, self))
 
     def json_query_symbols(self, args, d):
         """query_symbols() => ['symbol', ...]
 
         Return the list of active symbols
         """
-        d.callback(self.api.symbols.keys())
+        self.render(d, self.api.symbols.keys())
 
     def json_query_symbol(self, args, d):
         """query_symbol('symbol') => {'fieldname': data, ...}
@@ -103,7 +105,7 @@ class webserver(object):
         ret = None
         if symbol in self.api.symbols.keys():
             ret = self.api.symbols[symbol].export()
-        d.callback(ret)
+        self.render(d, ret)
 
     def json_query_accounts(self, args, d):
         """query_accounts() => ['account_name', ...]
@@ -149,7 +151,7 @@ class webserver(object):
             ret = self.api.orders[oid]
         else:
             ret = {oid: {'status:': 'Undefined'}}
-        d.callback(ret)
+        self.render(d, ret)
 
     def json_query_orders(self, args, d):
         """query_orders() => {'order_id': {'field': data, ...}, ...}
@@ -232,7 +234,7 @@ class webserver(object):
         Request cancellation of all pending orders
         """
         self.api.request_global_cancel()
-        d.callback('global cancel requested')
+        self.render(d, 'global cancel requested')
 
     def json_gateway_logon(self, args, d):
         """gateway_logon('username', 'password')
@@ -242,7 +244,7 @@ class webserver(object):
         username = str(args['username'])
         password = str(args['password'])
         #self.api.gateway_logon(username, password)
-        d.callback('gateway logon unavailable')
+        self.render(d, 'gateway logon unavailable')
 
     def json_gateway_logoff(self, args, d):
         """gateway_logoff()
@@ -250,7 +252,7 @@ class webserver(object):
         Logoff from gateway
         """
         # self.api.gateway_logoff()
-        d.callback('gateway logon unavailable')
+        self.render(d, 'gateway logon unavailable')
 
     def json_set_primary_exchange(self, args, d):
         """set_primary_exchange(symbol, exchange)
@@ -260,13 +262,13 @@ class webserver(object):
         symbol = str(args['symbol']).upper()
         exchange = str(args['exchange'])
 
-        d.callback(self.api.set_primary_exchange(symbol, exchange))
+        self.render(d, self.api.set_primary_exchange(symbol, exchange))
 
     def json_help(self, args, d):
         help = {}
         for command in self.commands:
             help[command] = getattr(self, 'json_%s' % command).__doc__
-        d.callback(help)
+        self.render(d, help)
 
 
 class Leaf(Resource):
@@ -291,15 +293,15 @@ class Leaf(Resource):
         data = json.loads(request.content.getvalue())
         self.root.output('%s:%d POST %s %s' % (
             request.client.host, request.client.port, request.path, repr(data)))
+        request.setHeader('Connection', 'close')
+        request.setHeader('Content-type', 'application/json')
+        request.channel.persistent = 0
         d = defer.Deferred()
-        d.addCallback(self.api_result, request)
+        d.addCallback(request.write)
+        d.addCallback(lambda ign: request.finish())
         d.addErrback(self.api_error)
         self.cmdfunc(data, d)
         return NOT_DONE_YET
-
-    def api_result(self, result, request):
-        request.write(json.dumps(result))
-        request.finish()
 
     def api_error(self, failure):
         self.root.output('ERROR: API errback: %s' % repr(failure))
@@ -308,7 +310,6 @@ class Leaf(Resource):
 
 def webServerFactory(api):
     return Site(webserver(api).root)
-
 
 if __name__ == '__main__':
 

@@ -11,6 +11,7 @@
 
 """
 
+
 import sys
 import types
 import datetime
@@ -26,7 +27,7 @@ SHUTDOWN_ON_TWS_DISCONNECT = True
 LOG_TWS_MESSAGES = False
 
 from twisted.python import log
-from twisted.internet import reactor, defer
+from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 
 from ib.ext.Contract import Contract
@@ -127,8 +128,8 @@ class TWS_Callback():
                 results = '%s.%s: %s\n' % (
                     self.tws.channel, self.label, json.dumps(results))
             self.tws.output('TWS_Callback.complete(%s)' % repr(results))
-            self.callable.callback(results)
-            self.callable.callback = None
+            self.callable.callback(json.dumps(results))
+            self.callable = None
             self.done = True
         else:
             self.tws.output(
@@ -137,13 +138,13 @@ class TWS_Callback():
     def check_expire(self):
         if not self.done:
             if time.time() > self.expire:
-                self.tws.WriteAllClients(
-                    'error: callback expired: %s' % repr((self.id, self.label)))
+                msg = 'error: callback expired: %s' % repr((self.id, self.label))
+                self.tws.WriteAllClients(msg)
                 if self.callable.callback.__name__ == 'write':
                     self.callable.callback(
                         '%s.error: %s callback expired\n', (self.tws.channel, self.label))
                 else:
-                    self.callable.callback(None)
+                    self.callable.errback(msg)
                 self.done = True
 
 

@@ -134,4 +134,4 @@ test: $(TESTS)
 
 run: 
 	@echo Running...
-	. $(VENV)/bin/activate && envdir etc/txtrader twistd --nodaemon --logfile=- --pidfile= --python=service/txtrader/tws.tac
+	. $(VENV)/bin/activate && envdir etc/txtrader twistd --reactor=poll --nodaemon --logfile=- --pidfile= --python=service/txtrader/tws.tac
