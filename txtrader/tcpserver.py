@@ -173,7 +173,7 @@ class tcpserver(basic.LineReceiver):
                             self.transport.getPeer())
         self.authmap.discard(self.transport.getPeer())
         self.transport.write('.connected: %s %s %s %s on %s\n' % (
-            self.factory.api.label, VERSION, DATE, LABEL, gethostname()))
+            self.factory.api.label, VERSION, DATE, LABEL, str(gethostname())))
 
     def connectionLost(self, reason):
         self.factory.output('client connection from %s lost: %s' %
