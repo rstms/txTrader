@@ -13,15 +13,16 @@
 from os import environ
 
 class Config():
-  """initialize with label to make all /etc/txtrader vars to use the form TXTRADER_label_VARNAME"""
-  def __init__(self, label=''):
-    self.label = '' if label else '_%s' % label.upper()
+    """initialize with label to make all /etc/txtrader vars to use the form TXTRADER_label_VARNAME"""
 
-  def get(self, key):
-    name = 'TXTRADER%s_%s' % (self.label, key)
-    if not name in environ.keys():
-      #print('Config.get(%s): %s not found in %s' % (key, name, environ.keys()))
-      name = 'TXTRADER_%s' % key
-    if not name in environ.keys():
-      print('ERROR: Config.get(%s) failed' % key)
-    return environ[name]
+    def __init__(self, label=''):
+        self.label = '' if label else '_%s' % label.upper()
+
+    def get(self, key):
+        name = 'TXTRADER%s_%s' % (self.label, key)
+        if not name in environ.keys():
+            #print('Config.get(%s): %s not found in %s' % (key, name, environ.keys()))
+            name = 'TXTRADER_%s' % key
+        if not name in environ.keys():
+            print('ERROR: Config.get(%s) failed' % key)
+        return environ[name]

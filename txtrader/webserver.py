@@ -18,32 +18,33 @@ from twisted.internet import reactor, endpoints, defer
 
 
 from pprint import pprint
-import sys, mx.DateTime, datetime
+import sys
+import datetime
 import json
-import version
-#from subprocess import check_output 
+from txtrader.version import VERSION
 
 class webserver(object):
     def __init__(self, api):
-        self.started = mx.DateTime.now()
-        self.api = api 
+        self.started = datetime.datetime.now()
+        self.api = api
         self.output = api.output
         self.root = Resource()
-        self.commands = [name[5:] for name in dir(self) if name.startswith('json_')]
-	for route in self.commands:
-          self.root.putChild(route, Leaf(self, getattr(self, 'json_%s' % route))) 
+        self.commands = [name[5:]
+                         for name in dir(self) if name.startswith('json_')]
+        for route in self.commands:
+            self.root.putChild(route, Leaf(
+                self, getattr(self, 'json_%s' % route)))
 
     def json_shutdown(self, args, d):
         """shutdown() 
 
         Request server shutdown
         """
-        #self.output('shutdown()')
+        # self.output('shutdown()')
         reactor.callLater(1, reactor.stop)
         d.callback('shutdown requested')
-    
-    def json_status(self, args, d):
 
+    def json_status(self, args, d):
         """status() => 'status string'
 
         return string describing current API connection status
@@ -55,16 +56,17 @@ class webserver(object):
 
         Return string showing start time and elapsed time for current server instance
         """
-        uptime = mx.DateTime.now()-self.started
-        d.callback('started %s (elapsed %s)' % (self.started.strftime('%Y-%m-%d %H:%M:%S'), uptime.strftime('%H:%M:%S')))
-      
+        uptime = datetime.datetime.now() - self.started
+        d.callback('started %s (elapsed %s)' % (self.started.strftime(
+            '%Y-%m-%d %H:%M:%S'), uptime.strftime('%H:%M:%S')))
+
     def json_version(self, args, d):
         """version() => 'version string'
 
         Return string containing release version of current server instance
         """
         ret = {}
-        ret['txtrader'] = version.VERSON
+        ret['txtrader'] = VERSON
         ret['python'] = sys.version
         #ret['pip'] = check_output('pip list', shell=True)
         d.callback(ret)
@@ -76,7 +78,7 @@ class webserver(object):
         """
         symbol = str(args['symbol']).upper()
         self.api.symbol_enable(symbol, self, d)
-      
+
     def json_del_symbol(self, args, d):
         """del_symbol('symbol')
 
@@ -84,14 +86,14 @@ class webserver(object):
         """
         symbol = str(args['symbol']).upper()
         d.callback(self.api.symbol_disable(symbol, self))
-    
+
     def json_query_symbols(self, args, d):
         """query_symbols() => ['symbol', ...]
 
         Return the list of active symbols
         """
         d.callback(self.api.symbols.keys())
-    
+
     def json_query_symbol(self, args, d):
         """query_symbol('symbol') => {'fieldname': data, ...}
 
@@ -102,14 +104,14 @@ class webserver(object):
         if symbol in self.api.symbols.keys():
             ret = self.api.symbols[symbol].export()
         d.callback(ret)
-      
+
     def json_query_accounts(self, args, d):
         """query_accounts() => ['account_name', ...]
 
         Return array of account names
         """
         self.api.request_accounts(d)
-    
+
     def json_set_account(self, args, d):
         """set_account('account')
 
@@ -125,18 +127,18 @@ class webserver(object):
         """
         account = str(args['account']).upper()
         if 'fields' in args:
-          fields = [str(f) for f in args['fields']]
+            fields = [str(f) for f in args['fields']]
         else:
-          fields = None
+            fields = None
         self.api.request_account_data(account, fields, d)
-      
+
     def json_query_positions(self, args, d):
         """query_positions() => {'account': {'fieldname': data, ...}, ...}
-        
+
         Return dict keyed by account containing dicts of position data fields
         """
         self.api.request_positions(d)
-      
+
     def json_query_order(self, args, d):
         """query_order('id') => {'fieldname': data, ...}
 
@@ -144,25 +146,25 @@ class webserver(object):
         """
         oid = str(args['id'])
         if oid in self.api.orders.keys():
-            ret=self.api.orders[oid]
+            ret = self.api.orders[oid]
         else:
-            ret={oid: {'status:': 'Undefined'}}
+            ret = {oid: {'status:': 'Undefined'}}
         d.callback(ret)
-      
+
     def json_query_orders(self, args, d):
         """query_orders() => {'order_id': {'field': data, ...}, ...}
 
         Return dict keyed by order id containing dicts of order data fields
         """
         self.api.request_orders(d)
-        
+
     def json_query_executions(self, args, d):
         """query_executions() => {'exec_id': {'field': data, ...}, ...}
 
         Return dict keyed by execution id containing dicts of execution report data fields
         """
         self.api.request_executions(d)
-      
+
     def json_market_order(self, args, d):
         """market_order('symbol', quantity) => {'field':, data, ...}
 
@@ -171,7 +173,7 @@ class webserver(object):
         symbol = str(args['symbol']).upper()
         quantity = int(args['quantity'])
         self.api.market_order(symbol, quantity, d)
-        
+
     def json_limit_order(self, args, d):
         """limit_order('symbol', price, quantity) => {'field':, data, ...}
 
@@ -181,7 +183,7 @@ class webserver(object):
         price = float(args['price'])
         quantity = int(args['quantity'])
         self.api.limit_order(symbol, price, quantity, d)
-      
+
     def json_stop_order(self, args, d):
         """stop_order('symbol', price, quantity) => {'field':, data, ...}
 
@@ -191,7 +193,7 @@ class webserver(object):
         price = float(args['price'])
         quantity = int(args['quantity'])
         self.api.stop_order(symbol, price, quantity, d)
-      
+
     def json_stoplimit_order(self, args, d):
         """stoplimit_order('symbol', stop_price, limit_price, quantity) => {'field':, data, ...}
 
@@ -203,7 +205,7 @@ class webserver(object):
         quantity = int(args['quantity'])
         self.api.stoplimit_order(symbol, stop_price, limit_price, quantity, d)
         return ret
-      
+
     def json_query_bars(self, args, d):
         """query_bars('symbol', bar_period, 'start', 'end')
               => ['Status: OK', [time, open, high, low, close, volume], ...]
@@ -215,26 +217,26 @@ class webserver(object):
         start = str(args['start'])
         end = str(args['end'])
         self.api.query_bars(symbol, period, start, end, d)
-      
+
     def json_cancel_order(self, args, d):
         """cancel_order('id')
- 
+
         Request cancellation of a pending order
         """
         oid = str(args['id'])
         self.api.cancel_order(oid, d)
-    
+
     def json_global_cancel(self, args, d):
         """global_cancel()
-  
+
         Request cancellation of all pending orders
         """
         self.api.request_global_cancel()
         d.callback('global cancel requested')
-        
+
     def json_gateway_logon(self, args, d):
         """gateway_logon('username', 'password')
-        
+
         logon to gateway
         """
         username = str(args['username'])
@@ -244,10 +246,10 @@ class webserver(object):
 
     def json_gateway_logoff(self, args, d):
         """gateway_logoff()
-    
+
         Logoff from gateway
         """
-        #self.api.gateway_logoff()
+        # self.api.gateway_logoff()
         d.callback('gateway logon unavailable')
 
     def json_set_primary_exchange(self, args, d):
@@ -263,30 +265,32 @@ class webserver(object):
     def json_help(self, args, d):
         help = {}
         for command in self.commands:
-          help[command] = getattr(self, 'json_%s' % command).__doc__
+            help[command] = getattr(self, 'json_%s' % command).__doc__
         d.callback(help)
+
 
 class Leaf(Resource):
     def __init__(self, root, cmdfunc):
         Resource.__init__(self)
         self.root = root
         self.cmdfunc = cmdfunc
-	self.isLeaf = True
+        self.isLeaf = True
 
     def render(self, request):
         self.request = request
         user = self.request.getUser()
         password = self.request.getPassword()
-        if user==self.root.api.username and password==self.root.api.password:
+        if user == self.root.api.username and password == self.root.api.password:
             return Resource.render(self, request)
         else:
             request.setResponseCode(http.UNAUTHORIZED)
             return json.dumps({'status': 'Unauthorized'})
 
     def render_POST(self, request):
-        #pprint(request.__dict__)
+        # pprint(request.__dict__)
         data = json.loads(request.content.getvalue())
-        self.root.output('%s:%d POST %s %s' % (request.client.host, request.client.port, request.path, repr(data)))
+        self.root.output('%s:%d POST %s %s' % (
+            request.client.host, request.client.port, request.path, repr(data)))
         d = defer.Deferred()
         d.addCallback(self.api_result, request)
         d.addErrback(self.api_error)
@@ -295,18 +299,20 @@ class Leaf(Resource):
 
     def api_result(self, result, request):
         request.write(json.dumps(result))
-        request.finish() 
-        
+        request.finish()
+
     def api_error(self, failure):
         self.root.output('ERROR: API errback: %s' % repr(failure))
         return failure
 
+
 def webServerFactory(api):
     return Site(webserver(api).root)
 
+
 if __name__ == '__main__':
 
-    #class API(object):
+    # class API(object):
     #    def __init__(self):
     #        self.username = 'testo'
     #        self.password = 'mesto'
@@ -314,7 +320,7 @@ if __name__ == '__main__':
     #    def output(self, msg):
     #        print('API: %s' % msg)
 
-    from tws import TWS
+    from txtrader.tws import TWS
     api = TWS()
 
     endpoint = endpoints.TCP4ServerEndpoint(reactor, 50070)

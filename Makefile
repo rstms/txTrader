@@ -5,7 +5,8 @@ THIS_FILE := $(lastword $(MAKEFILE_LIST))
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp
 REQUIRED_PIP = Twisted egenix-mx-base pudb ./dist/*.tar.gz ../IbPy/dist/*.tar.gz
 
-PYTHON = /usr/bin/python
+#PYTHON = /usr/bin/python
+PYTHON = /usr/bin/python3
 ENVDIR = /etc/txtrader
 VENV = $(HOME)/venv/txtrader
 
@@ -132,4 +133,4 @@ test: $(TESTS)
 
 run: 
 	@echo Running...
-	. $(VENV)/bin/activate && envdir etc/txtrader txtrader/$(MODE).py
+	. $(VENV)/bin/activate && envdir etc/txtrader twistd --nodaemon --logfile=- --pidfile= --python=service/txtrader/tws.tac

@@ -8,14 +8,11 @@ txtrader/__main__.py
 txtrader/client.py
 txtrader/config.py
 txtrader/cqg.py
-txtrader/debug.py
-txtrader/httpserver.py
 txtrader/monitor.py
 txtrader/rtx.py
 txtrader/tcpclient.py
 txtrader/tcpserver.py
-txtrader/test-txtrader.py
 txtrader/tws.py
+txtrader/txtrader_test.py
 txtrader/version.py
 txtrader/webserver.py
-txtrader/xmlserver.py
