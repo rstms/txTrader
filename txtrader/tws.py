@@ -24,8 +24,6 @@ DEFAULT_TWS_CALLBACK_TIMEOUT = 5
 
 SHUTDOWN_ON_TWS_DISCONNECT = True
 
-LOG_TWS_MESSAGES = False
-
 from twisted.python import log
 from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
@@ -163,6 +161,7 @@ class TWS():
             self.callback_timeout = DEFAULT_TWS_CALLBACK_TIMEOUT
         self.output('callback_timeout=%d' % self.callback_timeout)
         self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
+        self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
         self.output_second_ticks = bool(
             int(self.config.get('ENABLE_SECONDS_TICK')))
         self.suppress_error_codes = [
@@ -438,7 +437,7 @@ class TWS():
 
     def reply_handler(self, msg):
         """Handles of server replies"""
-        if LOG_TWS_MESSAGES:
+        if self.log_api_messages:
             self.output('message: %s %s ' % (repr(msg.typeName), msg))
 
         if msg.typeName in self.handlers.keys():
