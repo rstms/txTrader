@@ -3,7 +3,7 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp
-REQUIRED_PIP = Twisted egenix-mx-base pudb ./dist/*.tar.gz ../IbPy/dist/*.tar.gz
+REQUIRED_PIP = Twisted pudb ./dist/*.tar.gz ../IbPy/dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
 PYTHON = /usr/bin/python3
