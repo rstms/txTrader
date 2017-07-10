@@ -119,15 +119,15 @@ uninstall:
 	cat files.txt | xargs rm -f
 	rm -f /usr/local/bin/txtrader
 
-TESTS := $(wildcard txtrader/test-*.py)
+TESTS := $(wildcard txtrader/*_test.py)
 
-TPARM := -vvvs
+TPARAM := 
 
 .PHONY: test 
 
 test: $(TESTS)
 	@echo Testing...
-	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader py.test $(TPARM) $(notdir $^)
+	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader env TXTRADER_TEST_MODE=$(MODE) py.test -svx $(TPARAM) $(notdir $^)
 
 
 run: 

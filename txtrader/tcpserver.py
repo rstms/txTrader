@@ -11,7 +11,7 @@
 
 """
 
-from version import __version__, __date__, __label__
+from version import VERSION, DATE, LABEL
 
 import sys
 

@@ -12,8 +12,6 @@
 """
 
 
-from version import __version__, __date__, __label__
-
 import sys, mx.DateTime, types, datetime
 from uuid import uuid1
 import json
@@ -34,7 +32,7 @@ from twisted.python import log
 from twisted.internet.protocol import Factory, Protocol
 from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
-from twisted.web import xmlrpc, server
+from twisted.web import server
 from socket import gethostname
 
 
@@ -818,18 +816,3 @@ class RTX():
 
     def query_connection_status(self):
         return self.connection_status
-
-        
-if __name__=='__main__':
-    from xmlserver import xmlserver
-    from tcpserver import serverFactory
-    from tcpclient import clientFactory
-
-    log.startLogging(sys.stdout)
-    rtx=RTX()
-    reactor.listenTCP(rtx.tcp_port, serverFactory(rtx))
-    xmlsvr=xmlserver(rtx)
-    xmlrpc.addIntrospection(xmlsvr)
-    reactor.listenTCP(rtx.xmlrpc_port, server.Site(xmlsvr))
-    reactor.connectTCP(rtx.api_hostname, rtx.api_port, clientFactory(rtx.gateway_connect, 'rtgw'))
-    reactor.run()

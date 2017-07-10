@@ -64,7 +64,7 @@ class webserver(object):
         Return string containing release version of current server instance
         """
         ret = {}
-        ret['txtrader'] = version.__version__
+        ret['txtrader'] = version.VERSON
         ret['python'] = sys.version
         #ret['pip'] = check_output('pip list', shell=True)
         d.callback(ret)
@@ -74,7 +74,7 @@ class webserver(object):
 
         Request subscription to a symbol for price updates and order entry
         """
-        symbol = args['symbol'].encode().upper()
+        symbol = str(args['symbol']).upper()
         self.api.symbol_enable(symbol, self, d)
       
     def json_del_symbol(self, args, d):
@@ -82,7 +82,7 @@ class webserver(object):
 
         Delete subscription to a symbol for price updates and order entry
         """
-        symbol = args['symbol'].encode().upper()
+        symbol = str(args['symbol']).upper()
         d.callback(self.api.symbol_disable(symbol, self))
     
     def json_query_symbols(self, args, d):
@@ -97,7 +97,7 @@ class webserver(object):
 
         Return dict containing current data for given symbol
         """
-        symbol = args['symbol'].encode().upper()
+        symbol = str(args['symbol']).upper()
         ret = None
         if symbol in self.api.symbols.keys():
             ret = self.api.symbols[symbol].export()
@@ -115,7 +115,7 @@ class webserver(object):
 
         Select current active trading account.
         """
-        account = args['account'].encode().upper()
+        account = str(args['account']).upper()
         self.api.set_account(account, d)
 
     def json_query_account(self, args, d):
@@ -123,10 +123,9 @@ class webserver(object):
 
         Query account data for account. fields is list of fields to select; None=all fields
         """
-        
-        account = args['account'].encode().upper()
+        account = str(args['account']).upper()
         if 'fields' in args:
-          fields = [f.encode() for f in args['fields']]
+          fields = [str(f) for f in args['fields']]
         else:
           fields = None
         self.api.request_account_data(account, fields, d)
@@ -169,7 +168,7 @@ class webserver(object):
 
         Submit a market order, returning dict containing new order fields
         """
-        symbol = args['symbol'].encode().upper()
+        symbol = str(args['symbol']).upper()
         quantity = int(args['quantity'])
         self.api.market_order(symbol, quantity, d)
         
@@ -178,7 +177,7 @@ class webserver(object):
 
         Submit a limit order, returning dict containing new order fields
         """
-        symbol = args['symbol'].encode().upper()
+        symbol = str(args['symbol']).upper()
         price = float(args['price'])
         quantity = int(args['quantity'])
         self.api.limit_order(symbol, price, quantity, d)
@@ -188,7 +187,7 @@ class webserver(object):
 
         Submit a stop order, returning dict containing new order fields
         """
-        symbol = args['symbol'].encode().upper()
+        symbol = str(args['symbol']).upper()
         price = float(args['price'])
         quantity = int(args['quantity'])
         self.api.stop_order(symbol, price, quantity, d)
@@ -198,7 +197,7 @@ class webserver(object):
 
         Submit a stop-limit order, returning dict containing new order fields
         """
-        symbol = args['symbol'].encode().upper()
+        symbol = str(args['symbol']).upper()
         stop_price = float(args['stop_price'])
         limit_price = float(args['limit_price'])
         quantity = int(args['quantity'])
@@ -238,8 +237,8 @@ class webserver(object):
         
         logon to gateway
         """
-        username = args['username'].encode()
-        password = args['password'].encode()
+        username = str(args['username'])
+        password = str(args['password'])
         #self.api.gateway_logon(username, password)
         d.callback('gateway logon unavailable')
 
@@ -256,8 +255,8 @@ class webserver(object):
 
         Set primary exchange for symbol (default is SMART), delete mapping if exchange is None.
         """
-        symbol = args['symbol'].encode().upper()
-        exchange = args['exchange'].encode()
+        symbol = str(args['symbol']).upper()
+        exchange = str(args['exchange'])
 
         d.callback(self.api.set_primary_exchange(symbol, exchange))
 

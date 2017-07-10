@@ -11,8 +11,6 @@
 
 """
 
-from version import __version__, __date__, __label__
-
 import sys, mx.DateTime, types, datetime
 import json
 import time
@@ -29,11 +27,10 @@ from twisted.python import log
 from twisted.internet.protocol import Factory, Protocol
 from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
-from twisted.web import xmlrpc, server
+from twisted.web import server
 from twisted.protocols import basic
 from socket import gethostname
 
-#from xmlserver import xmlserver
 from tcpserver import serverFactory
 from webserver import webServerFactory
 
@@ -775,7 +772,6 @@ class TWS():
     def query_connection_status(self):
         return self.connection_status
     
-        
 if __name__=='__main__':
     log.startLogging(sys.stdout)
     tws=TWS()

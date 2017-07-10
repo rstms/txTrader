@@ -12,8 +12,6 @@
 """
 
 
-from version import __version__, __date__, __label__
-
 if __name__=='__main__':
     print 'installing win32eventreactor'
     from twisted.internet import win32eventreactor
@@ -36,13 +34,11 @@ from twisted.python import log
 from twisted.internet.protocol import Factory, Protocol
 from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
-from twisted.web import xmlrpc, server
+from twisted.web import server
 from twisted.protocols import basic
 from socket import gethostname
 import Queue
 
-from xmlserver import xmlserver
-from tcpserver import serverFactory
 
 class CQG_Quote():
     def __init__(self, comid):
@@ -904,15 +900,3 @@ class CQG():
         self.cel.APIConfiguration.PriceMode = constants.pmTradesOnly
         self.cel.APIConfiguration.TimeZoneCode=constants.tzCentral
         self.cel.Startup()
-
-
-if __name__=='__main__':
-    log.startLogging(sys.stdout)
-    cqg=CQG()
-    reactor.listenTCP(cqg.cel.tcp_port, serverFactory(cqg.cel))
-    rbs=xmlserver(cqg.cel)
-    xmlrpc.addIntrospection(rbs)
-    reactor.listenTCP(cqg.cel.xmlrpc_port, server.Site(rbs))
-    reactor.run()
-    
-

@@ -11,11 +11,11 @@
 """
 
 from distutils.core import setup
-from txtrader.version import __version__
+from txtrader.version import VERSION, LABEL
 setup(
   name='txTrader',
-  version=__version__,
-  description='TxTrader Securities Trading API Controller',
+  version=VERSION,
+  description=LABEL,
   author='Matt Krueger',
   author_email='mkrueger@rstms.net',
   url='https://github.com/rstms/txTrader',
