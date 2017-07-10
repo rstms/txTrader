@@ -808,3 +808,15 @@ class TWS():
 
     def query_connection_status(self):
         return self.connection_status
+
+
+if __name__ == '__main__':
+
+    from txtrader.tcpserver import serverFactory
+    from txtrader.webserver import webServerFactory
+
+    log.startLogging(sys.stdout)
+    tws=TWS()
+    reactor.listenTCP(tws.tcp_port, serverFactory(tws))
+    reactor.listenTCP(tws.http_port, webServerFactory(tws))
+    reactor.run()

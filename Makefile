@@ -3,11 +3,12 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp
-REQUIRED_PIP = Twisted pudb ./dist/*.tar.gz ../IbPy/dist/*.tar.gz
+REQUIRED_PIP = Twisted ../IbPy/dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
-PYTHON = /usr/bin/python3
 ENVDIR = /etc/txtrader
+PYTHON = python2
+PIP = pip2
 VENV = $(HOME)/venv/txtrader
 
 # mode can be: tws cqg rtx
@@ -81,7 +82,7 @@ venv:	.make-venv
 	virtualenv -p $(PYTHON) $(VENV)
 	. $(VENV)/bin/activate; \
 	for package in $(REQUIRED_PIP); do \
-          echo -n "Installing package $$package into virtual env..."; pip install $$package || false;\
+          echo -n "Installing package $$package into virtual env..."; $(PIP) install $$package || false;\
         done;
 	touch .make-venv
 
