@@ -27,6 +27,7 @@ SHUTDOWN_ON_TWS_DISCONNECT = True
 from twisted.python import log
 from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
+from twisted.python.failure import Failure
 
 from ib.ext.Contract import Contract
 from ib.ext.TickType import TickType
@@ -142,7 +143,7 @@ class TWS_Callback():
                     self.callable.callback(
                         '%s.error: %s callback expired\n', (self.tws.channel, self.label))
                 else:
-                    self.callable.errback(msg)
+                    self.callable.errback(Failure(Exception(msg)))
                 self.done = True
 
 
