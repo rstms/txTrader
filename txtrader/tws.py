@@ -408,6 +408,10 @@ class TWS():
             if str(cb.id) == str(msg.id):
                 cb.complete(result)
 
+        for cb in self.bardata_callbacks:
+            if str(cb.id) == str(msg.id):
+                 cb.complete(['Error: %s' % msg.errorMsg, None])
+
         for cb in self.addsymbol_callbacks:
             if str(cb.id.ticker_id) == str(msg.id):
                 cb.complete(False)
