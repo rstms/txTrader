@@ -13,9 +13,7 @@
 
 
 import sys
-import mx.DateTime
 import types
-import datetime
 from uuid import uuid1
 import json
 import time
@@ -37,7 +35,6 @@ from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
 from twisted.web import server
 from socket import gethostname
-
 
 class API_Symbol():
     def __init__(self, api, symbol, client_id, init_callback):
@@ -169,7 +166,7 @@ class API_Callback():
         self.label = label
         if not timeout:
             timeout = api.callback_timeout
-        self.expire = int(mx.DateTime.now()) + timeout
+        self.expire = int(DateTime.now()) + timeout
         self.callable = callable
         self.done = False
         self.data = None
@@ -356,7 +353,7 @@ class RTX():
         self.api_port = int(self.config.get('API_PORT'))
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
-        self.xmlrpc_port = int(self.config.get('XMLRPC_PORT'))
+        self.http_port = int(self.config.get('HTTP_PORT'))
         self.tcp_port = int(self.config.get('TCP_PORT'))
         self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
         if not self.callback_timeout:
@@ -820,37 +817,8 @@ class RTX():
         self.tws_conn.reqGlobalCancel()
 
     def query_bars(self, symbol, period, bar_start, bar_end, callback):
-        id = self.next_id()
-        self.output('bardata request id=%s' % id)
-        # 30 second timeout for bar data
-        cb = TWS_Callback(self, id, 'bardata', callback, 30)
-        contract = self.create_contract(symbol, 'STK', 'SMART', 'SMART', 'USD')
-        if type(bar_start) != types.IntType:
-            mxd = mx.DateTime.ISO.ParseDateTime(bar_start)
-            bar_start = datetime.datetime(
-                mxd.year, mxd.month, mxd.day, mxd.hour, mxd.minute, int(mxd.second))
-        if type(bar_end) != types.IntType:
-            mxd = mx.DateTime.ISO.ParseDateTime(bar_end)
-            bar_end = datetime.datetime(
-                mxd.year, mxd.month, mxd.day, mxd.hour, mxd.minute, int(mxd.second))
-        # try:
-        if 1 == 1:
-            endDateTime = bar_end.strftime('%Y%m%d %H:%M:%S')
-            durationStr = '%s S' % (bar_end - bar_start).seconds
-            barSizeSetting = {'1': '1 min', '5': '5 mins'}[
-                str(period)]  # legal period values are '1' and '5'
-            whatToShow = 'TRADES'
-            useRTH = 0
-            formatDate = 1
-            self.bardata_callbacks.append(cb)
-            self.output('edt:%s ds:%s bss:%s' %
-                        (endDateTime, durationStr, barSizeSetting))
-            self.tws_conn.reqHistoricalData(
-                id, contract, endDateTime, durationStr, barSizeSetting, whatToShow, useRTH, formatDate)
-        # except:
-        if 1 == 2:
-            cb.complete(['Error', 'query_bars(%s) failed!' % repr(
-                (bar_symbol, bar_period, bar_start, bar_end)), 'Count: 0'])
+        self.output('query_bars unimplemented')
+	return None
 
     def handle_historical_data(self, msg):
         for cb in self.bardata_callbacks:

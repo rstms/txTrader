@@ -7,7 +7,6 @@ txtrader/__init__.py
 txtrader/__main__.py
 txtrader/client.py
 txtrader/config.py
-txtrader/cqg.py
 txtrader/monitor.py
 txtrader/rtx.py
 txtrader/tcpclient.py

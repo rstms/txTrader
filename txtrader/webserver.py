@@ -19,13 +19,13 @@ from twisted.internet import reactor, endpoints, defer
 
 from pprint import pprint
 import sys
-import datetime
+from datetime import datetime
 import json
 from txtrader.version import VERSION
 
 class webserver(object):
     def __init__(self, api):
-        self.started = datetime.datetime.now()
+        self.started = datetime.now()
         self.api = api
         self.output = api.output
         self.root = Resource()
@@ -59,7 +59,7 @@ class webserver(object):
 
         Return string showing start time and elapsed time for current server instance
         """
-        uptime = datetime.datetime.now() - self.started
+        uptime = datetime.now() - self.started
         self.render(d, 'started %s (elapsed %s)' % (self.started.strftime('%Y-%m-%d %H:%M:%S'), str(uptime)))
 
     def json_version(self, args, d):

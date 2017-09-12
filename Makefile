@@ -12,7 +12,7 @@ PIP = pip2
 VENV = $(HOME)/venv/txtrader
 
 # mode can be: tws cqg rtx
-MODE=tws
+MODE=rtx
 
 # set account to AUTO for make testconfig to auto-set demo account
 TEST_HOST = 127.0.0.1

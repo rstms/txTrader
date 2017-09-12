@@ -27,7 +27,7 @@ class Server():
         subprocess.call('truncate --size 0 test.log', shell=True)
         self.logfile = open('test.log', 'a')
         self.process = subprocess.Popen(['envdir', '../etc/txtrader', 'twistd', '--nodaemon',
-                                         '--logfile=-', '--python=../service/txtrader/tws.tac'], stdout=self.logfile)
+                                         '--logfile=-', '--python=../service/txtrader/txtrader.tac'], stdout=self.logfile)
         assert self.process
         print('%s created as pid %d' % (repr(self.process), self.process.pid))
         print('Waiting for txtrader listen ports...')
