@@ -680,6 +680,9 @@ class TWS():
         self.openorder_callbacks.append(
             TWS_Callback(self, 0, 'orders', callback))
 
+    def request_order(self, oid, callback):
+        TWS_Callback(self, 0, 'request-order', callback).complete(self.orders[oid])
+
     def handle_open_order_end(self, msg):
         for cb in self.openorder_callbacks:
             cb.complete(self.orders)
