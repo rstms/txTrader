@@ -71,9 +71,9 @@ For the command line tool, add the current user to the 'txtrader' group:
 sudo usermod -a -G txtrader USERNAME
 ```
 
-XMLRPC Server
--------------
-The server implements the following XMLRPC calls:
+JSONRPC Server
+--------------
+The server implements the following JSONRPC calls:
 
 ```
 add_symbol('symbol')
@@ -209,3 +209,31 @@ uptime() => 'uptime string'
         Return string showing start time and elapsed time for current server instance
         
 ```
+
+Environment Varialbles
+----------------------
+
+These variables are found in `etc/txtrader` and copied to `/etc/txtrader` at installation.    They are
+loaded into the environment with `envdir` by the daemontools run script.
+
+Variable			| Description
+------------------------------- | --------------------------------------------------
+TXTRADER_API_ACCOUNT            | default API account, override with `set_account`
+TXTRADER_API_CLIENT_ID          | API credential; default to 0 (TWS Specific)
+TXTRADER_API_HOST               | hostname for API TCP/IP connection
+TXTRADER_API_PORT               | port for API TCP/IP connection
+TXTRADER_API_ROUTE              | trade execution rouute (Realtick specific)
+TXTRADER_CALLBACK_TIMEOUT       | default timeout for API status/response
+TXTRADER_DAEMON_USER            | username (used by run script)
+TXTRADER_ENABLE_SECONDS_TICK    | switch to control time tick update
+TXTRADER_ENABLE_TICKER          | switch to control bid/ask/last updates
+TXTRADER_HOST                   | hostname used by client for txTrader 
+TXTRADER_HTTP_PORT              | port used by client for txTrader JSON over HTTP 
+TXTRADER_LOG_API_MESSAGES       | switch API message output
+TXTRADER_LOG_CLIENT_MESSAGES    | switch client message output
+TXTRADER_MODE                   | backend mode tws|rtx|cqg
+TXTRADER_PASSWORD               | password for HTTP session
+TXTRADER_SUPPRESS_ERROR_CODES   | list of error codes to ignore (TWS)
+TXTRADER_TCP_PORT               | port used by client for txTrader ASCII output
+TXTRADER_USERNAME               | username for HTTP session 
+TXTRADER_VENV                   | virtualenv directory (used by run script)

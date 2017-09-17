@@ -3,7 +3,7 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp
-REQUIRED_PIP = Twisted ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
+REQUIRED_PIP = Twisted simplejson ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
 ENVDIR = /etc/txtrader
@@ -88,7 +88,6 @@ venv:	.make-venv
 
 install: .make-venv config
 	@echo "Installing txtrader..."
-	cp bin/txtrader /usr/local/bin
 	rm -rf /var/svc.d/txtrader
 	cp -rp service/txtrader /var/svc.d
 	touch /var/svc.d/txtrader/down
@@ -134,4 +133,4 @@ test: $(TESTS)
 
 run: 
 	@echo Running...
-	. $(VENV)/bin/activate && envdir etc/txtrader twistd --reactor=poll --nodaemon --logfile=- --pidfile= --python=service/txtrader/tws.tac
+	. $(VENV)/bin/activate && envdir etc/txtrader twistd --reactor=poll --nodaemon --logfile=- --pidfile= --python=service/txtrader/txtrader.tac

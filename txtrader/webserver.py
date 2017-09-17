@@ -68,7 +68,7 @@ class webserver(object):
         Return string containing release version of current server instance
         """
         ret = {}
-        ret['txtrader'] = VERSON
+        ret['txtrader'] = VERSION
         ret['python'] = sys.version
         #ret['pip'] = check_output('pip list', shell=True)
         self.render(d, ret)
@@ -147,11 +147,7 @@ class webserver(object):
         Return dict containing order status fields for given order id
         """
         oid = str(args['id'])
-        if oid in self.api.orders.keys():
-            ret = self.api.orders[oid]
-        else:
-            ret = {oid: {'status:': 'Undefined'}}
-        self.render(d, ret)
+        self.api.request_order(oid, d)
 
     def json_query_orders(self, args, d):
         """query_orders() => {'order_id': {'field': data, ...}, ...}
@@ -182,7 +178,7 @@ class webserver(object):
         Submit a limit order, returning dict containing new order fields
         """
         symbol = str(args['symbol']).upper()
-        price = float(args['price'])
+        price = float(args['limit_price'])
         quantity = int(args['quantity'])
         self.api.limit_order(symbol, price, quantity, d)
 
@@ -192,7 +188,7 @@ class webserver(object):
         Submit a stop order, returning dict containing new order fields
         """
         symbol = str(args['symbol']).upper()
-        price = float(args['price'])
+        price = float(args['stop_price'])
         quantity = int(args['quantity'])
         self.api.stop_order(symbol, price, quantity, d)
 
@@ -206,7 +202,6 @@ class webserver(object):
         limit_price = float(args['limit_price'])
         quantity = int(args['quantity'])
         self.api.stoplimit_order(symbol, stop_price, limit_price, quantity, d)
-        return ret
 
     def json_query_bars(self, args, d):
         """query_bars('symbol', bar_period, 'start', 'end')
@@ -300,6 +295,7 @@ class Leaf(Resource):
         d.addCallback(request.write)
         d.addCallback(lambda ign: request.finish())
         d.addErrback(self.api_error)
+        d.addErrback(lambda ign: request.finish())
         self.cmdfunc(data, d)
         return NOT_DONE_YET
 
