@@ -28,6 +28,8 @@ RTX_STYPE=1
 # allow disable of tick requests for testing
 ENABLE_TICK_REQUESTS = True 
 
+ENABLE_CXN_DEBUG = False
+
 DISCONNECT_SECONDS = 15
 SHUTDOWN_ON_DISCONNECT = True 
 ADD_SYMBOL_TIMEOUT = 5
@@ -306,7 +308,7 @@ class API_Callback():
             ret = self.format_results(results)
             if self.callable.callback.__name__ == 'write':
                 ret = '%s.%s: %s\n' % (self.api.channel, self.label, ret)
-            self.api.output('API_Callback.complete(%s)' % repr(ret))
+            #self.api.output('API_Callback.complete(%s)' % repr(ret))
             self.callable.callback(ret)
             self.callable = None
             self.done = True
@@ -608,11 +610,13 @@ class RTX():
         reactor.connectTCP(self.api_hostname, self.api_port, RtxClientFactory(self))
 
     def cxn_register(self, cxn):
-        self.output('cxn_register: %s' % repr(cxn))
+        if ENABLE_CXN_DEBUG:
+            self.output('cxn_register: %s' % repr(cxn))
         self.active_cxn[cxn.id] = cxn
 
     def cxn_activate(self, cxn):
-        self.output('cxn_activate: %s' % repr(cxn))
+        if ENABLE_CXN_DEBUG:
+            self.output('cxn_activate: %s' % repr(cxn))
         if not cxn.key in self.idle_cxn.keys():
             self.idle_cxn[cxn.key] = []
         self.idle_cxn[cxn.key].append(cxn)
@@ -623,7 +627,8 @@ class RTX():
             cxn = self.idle_cxn[key].pop()
         else:
             cxn = RTX_Connection(self, service, topic)
-        self.output('cxn_get() returning: %s' % repr(cxn))
+        if ENABLE_CXN_DEBUG:
+            self.output('cxn_get() returning: %s' % repr(cxn))
         return cxn
 
     def gateway_connect(self, protocol):
@@ -838,12 +843,16 @@ class RTX():
     def handle_time(self, rows):
         rows = json.loads(rows)
         if rows:
-            hour, minute = [int(i) for i in rows[0]['TRDTIM_1'].split(':')[0:2]]
-            if minute != self.last_minute:
-                self.last_minute = minute
-                self.WriteAllClients('time: %s %02d:%02d:00' % (rows[0]['TRD_DATE'], hour, minute))
+            field = rows[0]['TRDTIM_1']
+            if field.lower().startswith('error'):
+                self.error_handler(self.id, 'handle_time: time field %s' % field)
+            else:
+                hour, minute = [int(i) for i in field.split(':')[0:2]]
+                if minute != self.last_minute:
+                    self.last_minute = minute
+                    self.WriteAllClients('time: %s %02d:%02d:00' % (rows[0]['TRD_DATE'], hour, minute))
         else:
-            self.error_handler('handle_time: unexpected null input')
+            self.error_handler(self.id, 'handle_time: unexpected null input')
 
     def connect(self):
         self.update_connection_status('Connecting')
