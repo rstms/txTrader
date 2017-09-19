@@ -88,6 +88,9 @@ venv:	.make-venv
 
 install: .make-venv config
 	@echo "Installing txtrader..."
+	pwd
+	ls -al
+	ls -al /var/svc.d
 	rm -rf /var/svc.d/txtrader
 	cp -rp service/txtrader /var/svc.d
 	touch /var/svc.d/txtrader/down
