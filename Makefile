@@ -2,7 +2,7 @@
 
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
-REQUIRED_PACKAGES = daemontools-run ucspi-tcp
+REQUIRED_PACKAGES = daemontools-run ucspi-tcp python python-dev
 REQUIRED_PIP = Twisted simplejson ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
