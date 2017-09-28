@@ -229,7 +229,8 @@ TXTRADER_ENABLE_SECONDS_TICK    | switch to control time tick update
 TXTRADER_ENABLE_TICKER          | switch to control bid/ask/last updates
 TXTRADER_HOST                   | hostname used by client for txTrader 
 TXTRADER_HTTP_PORT              | port used by client for txTrader JSON over HTTP 
-TXTRADER_LOG_API_MESSAGES       | switch API message output
+TXTRADER_LOG_API_MESSAGES       | switch API message i/o logging
+TXTRADER_DEBUG_API_MESSAGES     | switch API message i/o hex dump
 TXTRADER_LOG_CLIENT_MESSAGES    | switch client message output
 TXTRADER_MODE                   | backend mode tws|rtx|cqg
 TXTRADER_PASSWORD               | password for HTTP session

@@ -16,6 +16,7 @@ from uuid import uuid1
 import simplejson as json
 import time
 from collections import OrderedDict
+from hexdump import hexdump
 
 from config import Config
 
@@ -564,13 +565,14 @@ class RTX():
         self.password = self.config.get('PASSWORD')
         self.http_port = int(self.config.get('HTTP_PORT'))
         self.tcp_port = int(self.config.get('TCP_PORT'))
+        self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
+        self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
+        self.debug_api_messages = bool(int(self.config.get('DEBUG_API_MESSAGES')))
+        self.log_client_messages = bool(int(self.config.get('LOG_CLIENT_MESSAGES')))
         self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
         if not self.callback_timeout:
             self.callback_timeout = DEFAULT_CALLBACK_TIMEOUT
         self.output('callback_timeout=%d' % self.callback_timeout)
-        self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
-        self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
-        self.log_client_messages = bool(int(self.config.get('LOG_CLIENT_MESSAGES')))
         self.current_account = ''
         self.clients = set([])
         self.orders = {}
@@ -648,6 +650,9 @@ class RTX():
         return self.gateway_receive
 
     def gateway_send(self, msg):
+        if self.debug_api_messages:
+            self.output('<--TX[%d]--' % (len(msg)))
+            hexdump(msg)
         if self.log_api_messages:
             self.output('<-- %s' % repr(msg))
         if self.gateway_sender:
@@ -655,6 +660,11 @@ class RTX():
 
     def gateway_receive(self, msg):
         """handle input from rtgw """
+
+        if self.debug_api_messages:
+            self.output('--RX[%d]-->' % (len(msg)))
+            hexdump(msg)
+
         o = json.loads(msg)
         msg_type = o['type']
         msg_id = o['id']
