@@ -279,6 +279,11 @@ class API_Order():
             'VOLUME' in self.fields and
             'VOLUME_TRADED' in self.fields and 
             self.fields['VOLUME'] == self.fields['VOLUME_TRADED'])
+
+    def is_cancelled(self):
+        return bool(self.fields['CURRENT_STATUS']=='COMPLETED' and
+            'status' in self.fields and self.fields['status'] == 'Error' and
+            'REASON' in self.fields and self.fields['REASON'] == 'User cancel')
  
     def has_fill_type(self):
         if self.fields['TYPE']=='ExchangeTradeOrder':
