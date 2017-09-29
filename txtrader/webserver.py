@@ -259,12 +259,29 @@ class webserver(object):
 
         self.render(d, self.api.set_primary_exchange(symbol, exchange))
 
+    def json_stage_market_order(self, args, d):
+        """stage_market_order(tag, symbol, quantity) => {'fieldname': data, ...}
+
+        Submit a staged market order (displays as staged in GUI, requiring manual aproval), returning dict containing new order fields
+        """
+        tag = str(args['tag'])
+        symbol = str(args['symbol']).upper()
+        quantity = int(args['quantity'])
+        self.api.stage_market_order(tag, symbol, quantity, d)
+
+    def json_execute_staged_market_order(self, args, d):
+        """execute_staged_market_order(order_id) => {'fieldname': data, ...}
+
+        Approve a staged market order for execution, returning dict containing new order fields
+        """
+        oid = str(args['id'])
+        self.api.execute_staged_market_order(oid, d)
+
     def json_help(self, args, d):
         help = {}
         for command in self.commands:
             help[command] = getattr(self, 'json_%s' % command).__doc__
         self.render(d, help)
-
 
 class Leaf(Resource):
     def __init__(self, root, cmdfunc):

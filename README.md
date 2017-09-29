@@ -222,7 +222,7 @@ TXTRADER_API_ACCOUNT            | default API account, override with `set_accoun
 TXTRADER_API_CLIENT_ID          | API credential; default to 0 (TWS Specific)
 TXTRADER_API_HOST               | hostname for API TCP/IP connection
 TXTRADER_API_PORT               | port for API TCP/IP connection
-TXTRADER_API_ROUTE              | trade execution rouute (Realtick specific)
+TXTRADER_API_ROUTE              | trade execution route (Realtick specific)
 TXTRADER_CALLBACK_TIMEOUT       | default timeout for API status/response
 TXTRADER_DAEMON_USER            | username (used by run script)
 TXTRADER_ENABLE_SECONDS_TICK    | switch to control time tick update

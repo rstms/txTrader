@@ -1,3 +1,3 @@
 #!/bin/sh
-. ~/txtrader-venv/bin/activate
+. ~/venv/txtrader/bin/activate
 exec envdir /etc/txtrader python -m txtrader.client $*

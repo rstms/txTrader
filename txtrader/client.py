@@ -51,13 +51,15 @@ class API():
             'cancel_order': (self.cancel_order, True, ('order_id',)),
             'query_executions': (self.query_executions, True, ()),
             'market_order': (self.market_order, True, ('symbol', 'quantity')),
+            'stage_market_order': (self.stage_market_order, True, ('tag', 'symbol', 'quantity')),
+            'execute_staged_market_order': (self.execute_staged_market_order, True, ('order_id')),
             'limit_order': (self.limit_order, True, ('symbol', 'limit_price', 'quantity')),
             'stop_order': (self.stop_order, True, ('symbol', 'stop_price', 'quantity')),
             'stoplimit_order': (self.stoplimit_order, True, ('symbol', 'stop_price', 'limit_price', 'quantity')),
             'global_cancel': (self.global_cancel, True, ()),
             'gateway_logon': (self.gateway_logon, True, ('username', 'password')),
             'gateway_logoff': (self.gateway_logoff, True, ()),
-            'set_primary_exchange': (self.set_primary_exchange, True, ('symbol', 'exchange'))
+            'set_primary_exchange': (self.set_primary_exchange, True, ('symbol', 'exchange')),
         }
 
     def cmd(self, cmd, args):
@@ -159,6 +161,13 @@ class API():
         symbol, quantity = args[0:2]
         return self.call_txtrader_api('market_order', {'symbol': symbol, 'quantity': int(quantity)})
 
+    def stage_market_order(self, *args):
+        tag, symbol, quantity = args[0:3]
+        return self.call_txtrader_api('stage_market_order', {'tag': tag, 'symbol': symbol, 'quantity': int(quantity)})
+
+    def execute_staged_market_order(self, *args):
+        return self.call_txtrader_api('execute_staged_market_order', {'id': args[0]})
+
     def limit_order(self, *args):
         symbol, limit_price, quantity = args[0:3]
         return self.call_txtrader_api('limit_order', {'symbol': symbol, 'limit_price': float(limit_price), 'quantity': int(quantity)})
@@ -183,3 +192,20 @@ class API():
 
     def set_primary_exchange(self, *args):
         return self.call_txtrader_api('set_primary_exchange', {'symbol': args[0], 'exchange': args[1]})
+
+
+if __name__=='__main__':
+    import simplejson as json
+    from sys import argv
+    flags=[]
+    while argv[1].startswith('-'):
+        flags.append(argv[1])
+        del(argv[1])
+    server, command = argv[1:3]
+    args = argv[3:]
+    ret = API(server).cmd(command, args)
+    if ret != None:
+        if '-p' in flags:
+            print(json.dumps(ret, sort_keys=True, indent=2, separators=(',', ': ')))
+        else:
+            print(json.dumps(ret))

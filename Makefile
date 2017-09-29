@@ -3,7 +3,7 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp python python-dev
-REQUIRED_PIP = Twisted hexdump simplejson ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
+REQUIRED_PIP = Twisted hexdump simplejson requests ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
 ENVDIR = /etc/txtrader
@@ -20,7 +20,7 @@ TEST_PORT = 7497
 TEST_ACCOUNT = AUTO
 
 default:
-	@echo "\nQuick Start Commands:\n\nsudo make config; make build; sudo make install; sudo make install\n"
+	@echo "\nQuick Start Commands:\n\nmake venv; sudo make config; make build; sudo make install; make run\n"
 
 clean:
 	@echo "Cleaning up..."
@@ -88,6 +88,7 @@ venv:	.make-venv
 
 install: .make-venv config
 	@echo "Installing txtrader..."
+	cp bin/txtrader /usr/local/bin/txtrader
 	mkdir -p /var/svc.d
 	rm -rf /var/svc.d/txtrader
 	cp -rp service/txtrader /var/svc.d

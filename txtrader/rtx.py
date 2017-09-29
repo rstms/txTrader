@@ -18,7 +18,7 @@ import time
 from collections import OrderedDict
 from hexdump import hexdump
 
-from config import Config
+from txtrader.config import Config
 
 DEFAULT_CALLBACK_TIMEOUT = 5
 
@@ -27,7 +27,6 @@ RTX_EXCHANGE='NYS'
 RTX_STYPE=1
 
 # allow disable of tick requests for testing
-ENABLE_TICK_REQUESTS = True 
 
 ENABLE_CXN_DEBUG = False
 
@@ -240,7 +239,7 @@ class API_Order():
         elif status=='LIVE':
             self.fields['status'] = 'Pending'
         elif status=='COMPLETED':
-            if otype == 'UserSubmitOrder':
+            if otype in ['UserSubmitOrder', 'UserSubmitStagedOrder']:
                 if not self.is_filled():
                     self.fields['status'] = 'Submitted'
             elif otype == 'UserSubmitCancel':
@@ -566,6 +565,7 @@ class RTX():
         self.http_port = int(self.config.get('HTTP_PORT'))
         self.tcp_port = int(self.config.get('TCP_PORT'))
         self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
+        self.enable_seconds_tick = bool(int(self.config.get('ENABLE_SECONDS_TICK')))
         self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
         self.debug_api_messages = bool(int(self.config.get('DEBUG_API_MESSAGES')))
         self.log_client_messages = bool(int(self.config.get('LOG_CLIENT_MESSAGES')))
@@ -751,22 +751,28 @@ class RTX():
     def handle_order_response(self, msg):
         #print('---handle_order_response: %s' % repr(msg))
         oid = msg['ORIGINAL_ORDER_ID'] if 'ORIGINAL_ORDER_ID' in msg else None
+        ret = None
         if oid:
             if self.pending_orders and 'CLIENT_ORDER_ID' in msg:
+                # this is a newly created order, it has a CLIENT_ORDER_ID
                 coid = msg['CLIENT_ORDER_ID']
                 if coid in self.pending_orders:
                     self.pending_orders[coid].initial_update(msg)
                     del self.pending_orders[coid]
-
-            if oid in self.orders.keys():
-                o = self.orders[oid]
+            elif self.pending_orders and (oid in self.pending_orders.keys()):
+                # this is a change order, ORIGINAL_ORDER_ID will be a key in pending_orders
+                self.pending_orders[oid].initial_update(msg)
+                del self.pending_orders[oid]
+            elif oid in self.orders.keys():
+                # this is an existing order, so update it
+                self.orders[oid].update(msg)
             else:
+                # we've never seen this order, so add it to the collection and update it
                 o = API_Order(self, oid, {})
                 self.orders[oid]=o
-            o.update(msg)
+                o.update(msg)
         else:
             self.error_handler(self.id, 'handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
-        return o.render()
 
     def send_order_status(self, order):
         o = order.render()
@@ -826,7 +832,7 @@ class RTX():
 
     def EverySecond(self):
         if self.connected:
-            if ENABLE_TICK_REQUESTS:
+            if self.enable_seconds_tick:
                 self.rtx_request('TA_SRV', 'LIVEQUOTE', 'LIVEQUOTE', 'DISP_NAME,TRDTIM_1,TRD_DATE',
                                  "DISP_NAME='$TIME'", 'tick', self.handle_time, self.timer_callbacks, 5)
         else:
@@ -880,13 +886,25 @@ class RTX():
     def stoplimit_order(self, symbol, stop_price, limit_price, quantity, callback):
         return self.submit_order('stoplimit', float(limit_price), float(stop_price), symbol, int(quantity), callback)
 
+    def stage_market_order(self, tag, symbol, quantity, callback):
+        return self.submit_order('market', 0, 0, symbol, int(quantity), callback, staged=tag)
+
+    def execute_staged_market_order(self, oid, callback):
+        if oid in self.orders:
+            o = self.orders[oid]
+            symbol = o.fields['DISP_NAME']
+            quantity = int(o.fields['VOLUME'])
+            if o.fields['BUYORSELL'] != 'Buy':
+                quantity *= -1
+            self.submit_order('market', 0, 0, symbol, quantity, callback, staged=None, oid=oid)
+        else:
+            ret = {oid: {'status:': 'Undefined'}}
+            API_Callback(self, 0, 'execute_staged_market_order', callback).complete(ret)
+
     def create_order_id(self):
         return str(uuid1())
 
-    def submit_order(self, order_type, price, stop_price, symbol, quantity, callback):
-        oid = self.create_order_id()
-
-        exchange = 'NYS'
+    def submit_order(self, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
 
         o=OrderedDict({})
         bank, branch, customer, deposit = self.current_account.split('.')[:4]
@@ -928,13 +946,30 @@ class RTX():
         o['VOLUME_TYPE']='AsEntered'
         o['VOLUME']=abs(quantity)
         
-        o['CLIENT_ORDER_ID']=oid
-        o['TYPE']='UserSubmitOrder'
+        if staged:
+            o['ORDER_TAG'] = staged
+            staging = 'Staged'
+        else:
+            staging = ''
+
+        if oid:
+            o['REFERS_TO_ID'] = oid
+            submission = 'Change'
+        else:
+            oid = self.create_order_id()
+            o['CLIENT_ORDER_ID']=oid
+            submission = 'Order'
+            
+        o['TYPE']='UserSubmit%s%s' % (staging, submission)
 
         # create callback to return to client after initial order update
         cb = API_Callback(self, oid, 'order', callback)
         self.order_callbacks.append(cb)
-        self.pending_orders[oid]=API_Order(self, oid, o, cb)
+        if oid in self.orders:
+            self.pending_orders[oid]=self.orders[oid]
+            self.orders[oid].callback = cb
+        else:
+            self.pending_orders[oid]=API_Order(self, oid, o, cb)
 
         fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
 
@@ -1063,7 +1098,7 @@ class RTX():
 
     def query_bars(self, symbol, period, bar_start, bar_end, callback):
         self.error_handler(self.id, 'ERROR: query_bars unimplemented')
-	return None
+        return None
 
     def handle_historical_data(self, msg):
         for cb in self.bardata_callbacks:
