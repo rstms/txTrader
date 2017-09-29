@@ -758,6 +758,7 @@ class RTX():
                 coid = msg['CLIENT_ORDER_ID']
                 if coid in self.pending_orders:
                     self.pending_orders[coid].initial_update(msg)
+                    self.orders[oid] = self.pending_orders[coid]
                     del self.pending_orders[coid]
             elif self.pending_orders and (oid in self.pending_orders.keys()):
                 # this is a change order, ORIGINAL_ORDER_ID will be a key in pending_orders
