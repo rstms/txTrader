@@ -233,7 +233,7 @@ class API_Order():
         self.fields['permid']=self.fields['ORIGINAL_ORDER_ID']
         status = self.fields.setdefault('CURRENT_STATUS', 'UNDEFINED')
         otype = self.fields.setdefault('TYPE', 'Undefined')
-        print('render: permid=%s CURRENT_STATUS=%s TYPE=%s' % (self.fields['permid'], status, otype))
+        #print('render: permid=%s CURRENT_STATUS=%s TYPE=%s' % (self.fields['permid'], status, otype))
         if status=='PENDING':
             self.fields['status'] = 'Submitted'
         elif status=='LIVE':
@@ -354,14 +354,17 @@ class API_Callback():
         # Positions should return {'ACOUNT': {'SYMBOL': QUANTITY, ...}, ...}
         positions = {}
         [positions.setdefault(a, {}) for a in self.api.accounts]
+	#print('format_positions: rows=%s' % repr(rows))
         for pos in rows:
-            account = self.api.make_account(pos)
-            positions[account][pos['DISP_NAME']] = int(pos['LONGPOS']) - int(pos['SHORTPOS'])
+            if pos:
+                account = self.api.make_account(pos)
+                positions[account][pos['DISP_NAME']] = int(pos['LONGPOS']) - int(pos['SHORTPOS'])
         return positions
 
     def format_orders(self, rows):
         for row in rows:
-            self.api.handle_order_response(row)
+            if row:
+                self.api.handle_order_response(row)
         results={}
         for k,v in self.api.orders.items():
             results[k]=v.fields
@@ -370,7 +373,8 @@ class API_Callback():
 
     def format_executions(self, rows):
         for row in rows:
-            self.api.handle_order_response(row)
+            if row:
+                self.api.handle_order_response(row)
         results={}
         for k,v in self.api.orders.items():
             if v.is_filled():
