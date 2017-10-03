@@ -49,10 +49,11 @@ class API():
             'query_orders': (self.query_orders, True, ()),
             'query_order': (self.query_order, True, ('order_id',)),
             'cancel_order': (self.cancel_order, True, ('order_id',)),
+            'cancel_staged_order': (self.cancel_staged_order, True, ('order_id',)),
             'query_executions': (self.query_executions, True, ()),
             'market_order': (self.market_order, True, ('symbol', 'quantity')),
+            'create_staged_order_ticket': (self.create_staged_order_ticket, True, ()),
             'stage_market_order': (self.stage_market_order, True, ('tag', 'symbol', 'quantity')),
-            'execute_staged_market_order': (self.execute_staged_market_order, True, ('order_id')),
             'limit_order': (self.limit_order, True, ('symbol', 'limit_price', 'quantity')),
             'stop_order': (self.stop_order, True, ('symbol', 'stop_price', 'quantity')),
             'stoplimit_order': (self.stoplimit_order, True, ('symbol', 'stop_price', 'limit_price', 'quantity')),
@@ -154,8 +155,14 @@ class API():
     def cancel_order(self, *args):
         return self.call_txtrader_api('cancel_order', {'id': args[0]})
 
+    def cancel_staged_order(self, *args):
+        return self.call_txtrader_api('cancel_staged_order', {'id': args[0]})
+
     def query_executions(self, *args):
         return self.call_txtrader_api('query_executions', {})
+
+    def create_staged_order_ticket(self, *args):
+        return self.call_txtrader_api('create_staged_order_ticket', {})
 
     def market_order(self, *args):
         symbol, quantity = args[0:2]
@@ -164,9 +171,6 @@ class API():
     def stage_market_order(self, *args):
         tag, symbol, quantity = args[0:3]
         return self.call_txtrader_api('stage_market_order', {'tag': tag, 'symbol': symbol, 'quantity': int(quantity)})
-
-    def execute_staged_market_order(self, *args):
-        return self.call_txtrader_api('execute_staged_market_order', {'id': args[0]})
 
     def limit_order(self, *args):
         symbol, limit_price, quantity = args[0:3]

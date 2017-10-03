@@ -3,7 +3,7 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp python python-dev
-REQUIRED_PIP = Twisted hexdump simplejson requests ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
+REQUIRED_PIP = pytest Twisted hexdump simplejson requests ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
 ENVDIR = /etc/txtrader
@@ -124,14 +124,13 @@ uninstall:
 
 TESTS := $(wildcard txtrader/*_test.py)
 
-TPARAM := 
+TPARM := 
 
 .PHONY: test 
 
 test: $(TESTS)
 	@echo Testing...
-	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader env TXTRADER_TEST_MODE=$(MODE) py.test -svx $(TPARAM) $(notdir $^)
-
+	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader env TXTRADER_TEST_MODE=$(MODE) py.test -svx $(TPARM) $(notdir $^)
 
 run: 
 	@echo Running...

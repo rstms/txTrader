@@ -223,6 +223,14 @@ class webserver(object):
         oid = str(args['id'])
         self.api.cancel_order(oid, d)
 
+    def json_cancel_staged_order(self, args, d):
+        """cancel_staged_order('id')
+
+        Request cancellation of a pending staged order
+        """
+        oid = str(args['id'])
+        self.api.cancel_staged_order(oid, d)
+
     def json_global_cancel(self, args, d):
         """global_cancel()
 
@@ -269,13 +277,8 @@ class webserver(object):
         quantity = int(args['quantity'])
         self.api.stage_market_order(tag, symbol, quantity, d)
 
-    def json_execute_staged_market_order(self, args, d):
-        """execute_staged_market_order(order_id) => {'fieldname': data, ...}
-
-        Approve a staged market order for execution, returning dict containing new order fields
-        """
-        oid = str(args['id'])
-        self.api.execute_staged_market_order(oid, d)
+    def json_create_staged_order_ticket(self, args, d):
+        self.api.create_staged_order_ticket(d)
 
     def json_help(self, args, d):
         help = {}

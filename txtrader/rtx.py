@@ -269,7 +269,7 @@ class API_Order():
             self.api.error_handler(self.oid, 'Unknown CURRENT_STATUS: %s' % status)
             self.fields['status'] = 'Error'
             
-        self.fields['updates'] = self.updates
+        #self.fields['updates'] = self.updates
 
         return self.fields
 
@@ -340,7 +340,7 @@ class API_Callback():
     def format_results(self, results):
         #print('format_results: label=%s results=%s' % (self.label, results))
         if self.label == 'account_data':
-            results = results[0]
+            results = self.format_account_data(results)
         elif self.label == 'positions':
             results = self.format_positions(results)
         elif self.label == 'orders':
@@ -349,6 +349,12 @@ class API_Callback():
             results = self.format_executions(results)
 
         return json.dumps(results)
+
+    def format_account_data(self, rows):
+        data = rows[0]
+        if 'EXCESS_EQ' in data:
+            data['_cash'] = float(data['EXCESS_EQ'])
+        return data
 
     def format_positions(self, rows):
         # Positions should return {'ACOUNT': {'SYMBOL': QUANTITY, ...}, ...}
@@ -586,6 +592,8 @@ class RTX():
         self.clients = set([])
         self.orders = {}
         self.pending_orders = {}
+        self.tickets = {}
+        self.pending_tickets = {}
         self.openorder_callbacks = []
         self.accounts = None
         self.account_data = {}
@@ -597,6 +605,7 @@ class RTX():
         self.bardata_callbacks = []
         self.cancel_callbacks = []
         self.order_callbacks = []
+        self.ticket_callbacks = []
         self.add_symbol_callbacks = []
         self.accountdata_callbacks = []
         self.set_account_callbacks = []
@@ -744,7 +753,7 @@ class RTX():
 
     def CheckPendingResults(self):
         # check each callback list for timeouts
-        for cblist in [self.timer_callbacks, self.position_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.add_symbol_callbacks, self.accountdata_callbacks, self.set_account_callbacks, self.account_request_callbacks]:
+        for cblist in [self.timer_callbacks, self.position_callbacks, self.ticket_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.add_symbol_callbacks, self.accountdata_callbacks, self.set_account_callbacks, self.account_request_callbacks]:
             dlist = []
             for cb in cblist:
                 cb.check_expire()
@@ -783,6 +792,16 @@ class RTX():
                 o.update(msg)
         else:
             self.error_handler(self.id, 'handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
+
+    def handle_ticket_update(self, cxn, msg):
+        return self.handle_ticket_response(msg)
+
+    def handle_ticket_response(self, msg):
+        tid = msg['CLIENT_ORDER_ID'] if 'CLIENT_ORDER_ID' in msg else None
+        if self.pending_tickets and tid in self.pending_tickets.keys():
+            self.pending_tickets[tid].initial_update(msg)
+            self.tickets[tid] = self.pending_tickets[tid]
+            del self.pending_tickets[tid]
 
     def send_order_status(self, order):
         o = order.render()
@@ -849,9 +868,7 @@ class RTX():
             self.seconds_disconnected += 1
             if self.seconds_disconnected > DISCONNECT_SECONDS:
                 if SHUTDOWN_ON_DISCONNECT:
-                    self.output('Realtick Gateway is disconnected; forcing shutdown')
-                    reactor.stop()
-
+                    self.force_disconnect('Realtick Gateway connection timed out after % seconds' % self.seconds_disconnected)
         self.CheckPendingResults()
 
     def WriteAllClients(self, msg):
@@ -866,11 +883,20 @@ class RTX():
         self.output('ERROR: %s %s' % (id, msg))
         self.WriteAllClients('error: %s %s' % (id, msg))
 
+    def force_disconnect(self, reason):
+        self.update_connection_status('Disconnected')
+        self.error_handler(self.id, 'API Disconnect: %s' % reason)
+        reactor.stop()
+
     def handle_time(self, rows):
         rows = json.loads(rows)
         if rows:
             field = rows[0]['TRDTIM_1']
-            if field.lower().startswith('error'):
+            if field == 'Error 17':
+                # this indicates the $TIME symbol is not found on the server, which happens when the login has failed
+                self.force_disconnect('Realtick Gateway reports $TIME symbol unknown; connection has failed')
+            
+            elif field.lower().startswith('error'):
                 self.error_handler(self.id, 'handle_time: time field %s' % field)
             else:
                 hour, minute = [int(i) for i in field.split(':')[0:2]]
@@ -899,23 +925,37 @@ class RTX():
     def stage_market_order(self, tag, symbol, quantity, callback):
         return self.submit_order('market', 0, 0, symbol, int(quantity), callback, staged=tag)
 
-    def execute_staged_market_order(self, oid, callback):
-        if oid in self.orders:
-            o = self.orders[oid]
-            symbol = o.fields['DISP_NAME']
-            quantity = int(o.fields['VOLUME'])
-            if o.fields['BUYORSELL'] != 'Buy':
-                quantity *= -1
-            self.submit_order('market', 0, 0, symbol, quantity, callback, staged=None, oid=oid)
-        else:
-            ret = {oid: {'status:': 'Undefined'}}
-            API_Callback(self, 0, 'execute_staged_market_order', callback).complete(ret)
-
     def create_order_id(self):
         return str(uuid1())
 
-    def submit_order(self, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
+    def create_staged_order_ticket(self, callback):
+        o=OrderedDict({})
+        bank, branch, customer, deposit = self.current_account.split('.')[:4]
+        o['BANK']=bank
+        o['BRANCH']=branch
+        o['CUSTOMER']=customer
+        o['DEPOSIT']=deposit
+        tid = 'T-%s' % self.create_order_id() 
+        o['CLIENT_ORDER_ID']=tid
+        o['DISP_NAME']='N/A'
+        o['STYP']=RTX_STYPE # stock
+        o['EXIT_VEHICLE']='NONE'
+        o['TYPE']='UserSubmitStagedOrder'
 
+        # create callback to return to client after initial order update
+        cb = API_Callback(self, tid, 'ticket', callback)
+        self.ticket_callbacks.append(cb)
+        self.pending_tickets[tid]=API_Order(self, tid, o, cb)
+        fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
+
+        cb = API_Callback(self, tid, 'ticket', RTX_LocalCallback(self, self.ticket_submit_callback))
+        self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
+
+    def ticket_submit_callback(self, data):
+        """called when staged order ticket request has been submitted with 'poke' and OnOtherAck has returned""" 
+        self.output('staged order ticket submitted: %s' % repr(data))
+
+    def submit_order(self, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
         o=OrderedDict({})
         bank, branch, customer, deposit = self.current_account.split('.')[:4]
         o['BANK']=bank
@@ -990,7 +1030,7 @@ class RTX():
         """called when order has been submitted with 'poke' and OnOtherAck has returned""" 
         self.output('order submitted: %s' % repr(data))
 
-    def cancel_order(self, oid, callback):
+    def process_cancel_order(self, oid, callback, staged=''):
         self.output('cancel_order %s' % oid)
         cb = API_Callback(self, oid, 'cancel_order', callback)
         order = self.orders[oid] if oid in self.orders else None
@@ -999,13 +1039,19 @@ class RTX():
                 cb.complete({'status': 'Error', 'errorMsg': 'Already canceled.', 'id': oid})
             else:
                 msg=OrderedDict({})
-                msg['TYPE']='UserCancelOrder'
+                msg['TYPE']='UserCancel%sOrder' % staged
                 msg['REFERS_TO_ID']=oid
                 fields= ','.join(['%s=%s' %(i,v) for i,v in msg.iteritems()])
                 self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
                 self.cancel_callbacks.append(cb)
         else:
             cb.complete({'status': 'Error', 'errorMsg': 'Order not found', 'id': oid})
+
+    def cancel_order(self, oid, callback):
+        self.process_cancel_order(oid, callback, '')
+
+    def cancel_staged_order(self, oid, callback):
+        self.process_cancel_order(oid, callback, 'Staged')
 
     def symbol_enable(self, symbol, client, callback):
         self.output('symbol_enable(%s,%s,%s)' % (symbol, client, callback))
