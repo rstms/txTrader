@@ -22,7 +22,7 @@ def pytest_collection_modifyitems(config, items):
     if not config.getoption("--runstaged"):
         skip_staged = pytest.mark.skip(reason="need --runstaged option to run")
         for item in items:
-            if "slow" in item.keywords:
+            if "staged" in item.keywords:
                 item.add_marker(skip_staged)
 
     if not config.getoption("--runbars"):

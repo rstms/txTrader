@@ -47,7 +47,8 @@ from socket import gethostname
 
 class RtxClient(LineReceiver):
     delimiter = '\n'
-    MAX_LENGTH = 1024 * 1024 * 16 
+    # set 16MB line buffer
+    MAX_LENGTH = 0x1000000
     def __init__(self, rtx):
         self.rtx = rtx
 
@@ -211,6 +212,7 @@ class API_Order():
         self.fields = data
         self.callback = callback
         self.updates = {}
+        self.suborders = {}
 
     def initial_update(self, data):
         self.update(data)
@@ -219,18 +221,45 @@ class API_Order():
             self.callback = None
 
     def update(self, data):
-        if 'status' in self.fields:
-            oldstatus = json.dumps(self.fields)
+
+        field_state = json.dumps(self.fields)
+    
+        if 'ORDER_ID' in data:
+            order_id = data['ORDER_ID']
+            if order_id in self.suborders.keys():
+                if data == self.suborders[order_id]:
+                    change = 'dup'
+                else:
+                     change = 'changed'
+            else:
+                change = 'new'
+            self.suborders[order_id] = data
         else:
-            oldstatus = ''
-        changes={} 
-        for k,v in data.items():
-            ov = self.fields.setdefault(k,None)
-            self.fields[k]=v
-            if v!=ov:
-                changes[k]=v
-        self.updates[time.time()]=changes
-        if json.dumps(self.fields) != oldstatus:
+            self.api.error_handler(self.oid, 'Order Update without ORDER_ID: %s' % repr(data))
+            order_id = 'unknown'
+            change = 'error'
+
+        if self.api.log_order_updates:
+            self.api.output('ORDER_UPDATE: OID=%s ORDER_ID=%s %s' % (self.oid, order_id, change))
+
+        # only apply new or changed messages to the base order; (don't move order status back in time when refresh happens)
+
+        if change in ['new', 'changed']:
+            changes={} 
+            for k,v in data.items():
+                ov = self.fields.setdefault(k,None)
+                self.fields[k]=v
+                if v!=ov:
+                    changes[k]=v
+
+            if changes:
+                if self.api.log_order_updates:
+                    self.api.output('ORDER_CHANGES: OID=%s ORDER_ID=%s %s' % (self.oid, order_id, repr(changes)))
+                if order_id != self.oid:
+                    self.updates[order_id] = changes
+
+
+        if json.dumps(self.fields) != field_state:
             self.api.send_order_status(self)
 
     def render(self):
@@ -238,8 +267,8 @@ class API_Order():
         self.fields['permid']=self.fields['ORIGINAL_ORDER_ID']
         status = self.fields.setdefault('CURRENT_STATUS', 'UNDEFINED')
         otype = self.fields.setdefault('TYPE', 'Undefined')
-        #print('render: permid=%s CURRENT_STATUS=%s TYPE=%s' % (self.fields['permid'], status, otype))
-        if status=='PENDING':
+        #print('render: permid=%s ORDER_ID=%s CURRENT_STATUS=%s TYPE=%s' % (self.fields['permid'], self.fields['ORDER_ID'], status, otype))
+        if status=='PENDING': 
             self.fields['status'] = 'Submitted'
         elif status=='LIVE':
             self.fields['status'] = 'Pending'
@@ -272,7 +301,7 @@ class API_Order():
             self.api.error_handler(self.oid, 'Unknown CURRENT_STATUS: %s' % status)
             self.fields['status'] = 'Error'
             
-        #self.fields['updates'] = self.updates
+        self.fields['updates'] = self.updates
 
         return self.fields
 
@@ -587,6 +616,7 @@ class RTX():
         self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
         self.debug_api_messages = bool(int(self.config.get('DEBUG_API_MESSAGES')))
         self.log_client_messages = bool(int(self.config.get('LOG_CLIENT_MESSAGES')))
+        self.log_order_updates = bool(int(self.config.get('LOG_ORDER_UPDATES')))
         self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
         if not self.callback_timeout:
             self.callback_timeout = DEFAULT_CALLBACK_TIMEOUT
@@ -677,7 +707,7 @@ class RTX():
         if self.log_api_messages:
             self.output('<-- %s' % repr(msg))
         if self.gateway_sender:
-            self.gateway_sender('%s\n' % msg)
+            self.gateway_sender('%s\n' % str(msg))
 
 
     def dump_input_message(self, msg):
