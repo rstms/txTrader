@@ -16,7 +16,7 @@ import signal
 import time
 
 import simplejson as json
-
+import pprint
 import pytest
 
 testmode = 'RTX'
@@ -93,7 +93,8 @@ def test_accounts(api):
     info = api.query_account(account)
     assert info
     print('account[%s] info:' % account)
-    print(json.dumps(info, indent=2, separators=(',', ':')))
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(info)
 
 def test_stock_prices(api):
     a = api.query_accounts()
@@ -288,6 +289,7 @@ def test_trades(api):
    
     assert p['AAPL'] == 90
 
+@pytest.mark.staged
 def test_staged_trades(api):
     account = api.query_accounts()[0]
     api.set_account(account)
@@ -301,6 +303,7 @@ def test_staged_trades(api):
     _wait_for_fill(api, oid)
 
 
+@pytest.mark.staged
 def test_staged_trade_cancel(api):
     account = api.query_accounts()[0]
     api.set_account(account)
@@ -320,6 +323,7 @@ def test_staged_trade_cancel(api):
     assert t['REASON'].lower().startswith('user cancel')
     print('detected user cancel of %s' % oid)
 
+@pytest.mark.staged
 def test_staged_trade_execute(api):
     account = api.query_accounts()[0]
     api.set_account(account)
@@ -424,6 +428,7 @@ def test_trade_submission_error_bad_quantity(api):
 #    def json_stoplimit_order(self, args, d): 
 #        """stoplimit_order('symbol', stop_price, limit_price, quantity) => {'field':, data, ...} 
 
+@pytest.mark.barchart
 def dont_test_bars(api): 
     sbar = '2017-07-06 09:30:00' 
     ebar = '2017-07-06 09:40:00' 

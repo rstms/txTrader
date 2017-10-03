@@ -20,7 +20,7 @@ from twisted.internet import reactor, endpoints, defer
 from pprint import pprint
 import sys
 from datetime import datetime
-import json
+import ujson as json
 from txtrader.version import VERSION
 
 class webserver(object):

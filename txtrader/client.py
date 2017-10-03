@@ -199,7 +199,7 @@ class API():
 
 
 if __name__=='__main__':
-    import simplejson as json
+    import ujson as json
     from sys import argv
     flags=[]
     while argv[1].startswith('-'):

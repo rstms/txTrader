@@ -13,7 +13,7 @@
 import sys
 import types
 from uuid import uuid1
-import simplejson as json
+import ujson as json
 import time
 from collections import OrderedDict
 from hexdump import hexdump
@@ -45,10 +45,10 @@ from twisted.internet.task import LoopingCall
 from twisted.web import server
 from socket import gethostname
 
-
 class RtxClient(LineReceiver):
+    delimiter = '\n'
+    MAX_LENGTH = 1024 * 1024 * 16 
     def __init__(self, rtx):
-        self.delimiter = '\n'
         self.rtx = rtx
 
     def connectionMade(self):
@@ -57,7 +57,12 @@ class RtxClient(LineReceiver):
     def lineReceived(self, data):
         self.rtx.gateway_receive(data)
 
+    def lineLengthExceeded(self, line):
+        self.rtx.force_disconnect('RtxClient: Line length exceeded: line=%s' % repr(line))
+
 class RtxClientFactory(ReconnectingClientFactory):
+    initialDelay = 15
+    maxDelay = 60
     def __init__(self, rtx):
         self.rtx = rtx
 
@@ -239,7 +244,7 @@ class API_Order():
         elif status=='LIVE':
             self.fields['status'] = 'Pending'
         elif status=='COMPLETED':
-            if otype in ['UserSubmitOrder', 'UserSubmitStagedOrder']:
+            if otype in ['UserSubmitOrder', 'UserSubmitStagedOrder', 'UserSubmitStatus', 'ExchangeReportStatus']:
                 if not self.is_filled():
                     self.fields['status'] = 'Submitted'
             elif otype == 'UserSubmitCancel':
@@ -248,7 +253,7 @@ class API_Order():
                 self.fields['status'] = 'Changed'
             elif otype == 'ExchangeAcceptOrder':
                 self.fields['status'] = 'Accepted'
-            elif otype == 'ClerkReject':
+            elif otype in ['ClerkReject', 'ExchangeKillOrder']:
                 self.fields['status'] = 'Error'
             elif otype == 'ExchangeTradeOrder':
                 if self.is_filled():
@@ -256,8 +261,6 @@ class API_Order():
                     self.fields['filled'] =self.fields['VOLUME_TRADED']
                     self.fields['remaining']=0
                     self.fields['avgfillprice']=self.fields['AVG_PRICE']
-                else:
-                    self.api.error_handler(self.oid, 'exchangeTradeOrder but not is_filled: %s' % self.fields)
             else:
                 self.api.error_handler(self.oid, 'Unknown TYPE: %s' % otype)
                 self.fields['status'] = 'Error'
@@ -276,9 +279,9 @@ class API_Order():
     def is_filled(self):
         return bool(self.fields['CURRENT_STATUS']=='COMPLETED' and
             self.has_fill_type() and
-            'VOLUME' in self.fields and
+            'ORIGINAL_VOLUME' in self.fields and
             'VOLUME_TRADED' in self.fields and 
-            self.fields['VOLUME'] == self.fields['VOLUME_TRADED'])
+            self.fields['ORIGINAL_VOLUME'] == self.fields['VOLUME_TRADED'])
 
     def is_cancelled(self):
         return bool(self.fields['CURRENT_STATUS']=='COMPLETED' and
@@ -676,14 +679,27 @@ class RTX():
         if self.gateway_sender:
             self.gateway_sender('%s\n' % msg)
 
+
+    def dump_input_message(self, msg):
+        self.output('--RX[%d]-->' % (len(msg)))
+        hexdump(msg)
+
+    def receive_exception(self, t, e, msg):
+        self.error_handler(self.id, 'Exception %s %s parsing data from RTGW' % (t, e))
+        self.dump_input_message(msg)
+        return None
+
     def gateway_receive(self, msg):
         """handle input from rtgw """
 
         if self.debug_api_messages:
-            self.output('--RX[%d]-->' % (len(msg)))
-            hexdump(msg)
+            self.dump_input_message(msg)
 
-        o = json.loads(msg)
+        try:
+            o = json.loads(msg)
+        except Exception as e:
+            return self.receive_exception(sys.exc_info()[0], e, msg)
+
         msg_type = o['type']
         msg_id = o['id']
         msg_data = o['data']
