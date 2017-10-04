@@ -495,9 +495,14 @@ class RTX_Connection():
         if self.log:
             self.api.output('Connection Status: %s %s' % (self, data))
         if self.status_pending and data['msg'] == self.status_pending:
-            self.status_pending = None
+            # if update_handler is set (an Advise is active) then leave status_pending, because we'll 
+            # get sporadic OnOtherAck status messages mixed in with the update messages
+            # in all other cases, clear status_pending, since we only expect the one status message
+            if not self.update_handler:
+                self.status_pending = None
+
             if data['status'] == '1':
-                # special case for the first status ack of a new connection, may need to do on_connect_action
+                # special case for the first status ack of a new connection; we may need to do on_connect_action
                 if data['msg'] == 'OnInitAck':
                     self.connected = True
                     if self.on_connect_action:
@@ -506,11 +511,11 @@ class RTX_Connection():
                         self.api.output('Sending on_connect_action: %s' % repr(self.on_connect_action))
                         self.send(cmd, arg, exa, cba, exr, cbr, exs, cbs, cbu, uhr)
                         self.on_connect_action = None
+                        print('after on_connect_action send: self.status_pending=%s' % self.status_pending)
 
                 if self.status_callback:
                     self.status_callback.complete(data)
                     self.status_callback = None
-                    self.status_pending = None
             else:
                 self.api.error_handler(self.id, 'Status Error: %s' % data)
         else:
