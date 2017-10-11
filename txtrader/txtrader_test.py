@@ -21,51 +21,7 @@ import pytest
 
 testmode = 'RTX'
 
-class Server():
-    def __init__(self):
-        self.mode = os.environ['TXTRADER_TEST_MODE'] if 'TXTRADER_TEST_MODE' in os.environ else 'RTX'
-        self.mode = self.mode.upper()
-        testmode = self.mode
-        print('Starting test txTrader %s server...' % self.mode)
-        assert subprocess.call('ps -ax | egrep [t]wistd', shell=True)
-        subprocess.call('truncate --size 0 test.log', shell=True)
-        self.logfile = open('test.log', 'a')
-        self.process = subprocess.Popen(['envdir', '../etc/txtrader', 'twistd', '--nodaemon',
-                                         '--logfile=-', '--python=../service/txtrader/txtrader.tac'], stdout=self.logfile)
-        assert self.process
-        print('%s created as pid %d' % (repr(self.process), self.process.pid))
-        print('Waiting for txtrader listen ports...')
-        while subprocess.call('netstat -ant | egrep LISTEN | egrep 50090>/dev/null', shell=True):
-            time.sleep(.25)
-        assert not subprocess.call(
-            'ps -ax | egrep [t]wistd >/dev/null', shell=True)
-        assert not subprocess.call(
-            'netstat -ant | egrep LISTEN | egrep 50090>/dev/null', shell=True)
-        assert not subprocess.call(
-            'netstat -ant | egrep LISTEN | egrep 50070>/dev/null', shell=True)
-        print('Test server ready.')
-
-    def init(self):
-        self.api = API(self.mode)
-        assert self.api
-        return self.api
-
-    def __del__(self):
-        print()
-        print('Stopping txTrader:  Waiting for %s to terminate...' % repr(self.process.pid))
-        self.api.shutdown()
-        #os.kill(self.process.pid, signal.SIGTERM)
-        self.process.wait()
-        print('Terminated; exit=%d' % (self.process.returncode))
-        self.logfile.close()
-        print('Waiting 15 seconds to avoid sqlBlocked at Realtick...')
-        time.sleep(15)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, ex_type, ex_value, traceback):
-        pass
+from server_test import Server
 
 @pytest.fixture(scope='module')
 def api():
@@ -97,8 +53,8 @@ def test_accounts(api):
     pp.pprint(info)
 
 def test_stock_prices(api):
-    a = api.query_accounts()
-    assert api.set_account(a[0])
+    #a = api.query_accounts()
+    #assert api.set_account(a[0])
     s = api.add_symbol('IBM')
     assert s
     s = api.add_symbol('FNORD')
@@ -247,12 +203,12 @@ def _position(api, account):
 
 def _market_order(api, symbol, quantity, return_on_error=False):
     o = api.market_order(symbol, quantity)
-    print('market_order(%s,%s) returned %s' % (symbol, quantity, o))
-    assert o
+    assert o 
     assert 'permid' in o.keys()
     assert 'status' in o.keys()
     oid = o['permid']
     assert type(oid) == str or type(oid) == unicode
+    print('market_order(%s,%s) returned oid=%s status=%s' % (symbol, quantity, oid, o['status']))
     _wait_for_fill(api, oid, return_on_error)  
     return oid
 
@@ -339,7 +295,7 @@ def test_staged_trade_execute(api):
     time.sleep(5)
     status = api.query_order(oid)['status']
     print('cancelling order %s with status=%s...' % (oid, status))
-    r = api.cancel_staged_order(oid)
+    r = api.cancel_order(oid)
     print('cancel returned %s' % repr(r))
     assert r
     _wait_for_fill(api, oid, True)
@@ -403,6 +359,71 @@ def test_trade_and_query_executions_and_query_order(api):
     assert 'status' in o
     assert o['status']=='Filled'
 
+"""
+    STRAT_PARAMETERS fields per 2017-09-29 email from Raymond Tsui (rtsui@ezsoft.com)
+
+        847=15      (type?)
+        9000=15     (version?) 
+        9007=1      Volume Min
+        9008=2      Volume Max
+        9039=0.03   iWouldPrice (>=0)
+        9088=1      Execution Style (1=Passive, 2=Neutral, 3=Aggressive, 4=Custom)
+        9076=4      MinDarkFill
+        9043=0      MOO Allowed (0=unchecked, 1=checked)
+        9011=0      MOC Allowed (0=unchedked, 1=checked)
+"""
+ 
+@pytest.mark.algo
+def test_algo_order(api):
+    print()
+
+    account = api.query_accounts()[0]
+    api.set_account(account)
+    ret = api.get_order_route()
+    assert type(ret) == dict
+    assert len(ret.keys()) == 1
+    oldroute = ret.keys()[0] 
+    assert type(oldroute) == str or type(oldroute) == unicode
+    assert ret[oldroute] == None
+    assert oldroute in ['DEMO', 'DEMOEUR']
+
+    algo_order_parameters = {
+        'STRAT_ID': 'ABRAXAS',
+        'BOOKING_TYPE': '0',
+        'STRAT_PARAMETERS': {
+            '847': '15',
+            '9000': '15',
+            '9007': '1',
+            '9008': '2',
+            '9039': '0.03',
+            '9088': '1',
+            '9076': '4',
+            '9043': '0',
+            '9011': '0',
+        },
+        'STRAT_TIME_TAGS': '-1:-2',
+        'ORDER_FLAGS_3': 0,
+        'STRAT_TARGET': 'ATDL',
+        'STRATEGY_NAME': 'Abraxas',
+        'SETTLE_TYPE_SYNTHETIC': -1,
+        'STRAT_TYPE': 'BNYCONVERGEX_BNYAlgos_from_RT_US_timefix',
+        'STRAT_STRING_40': 'ABRAXAS',
+        'DEST_ROUTE': 'TEST-CVGX-USALGO-ATD'
+    }
+    route = 'TEST-CVGX-USALGO-ATD'
+    p = {route: algo_order_parameters}
+
+    ret = api.set_order_route(p)
+    assert ret
+
+    assert api.get_order_route() == p
+
+    oid = _market_order(api, 'INTC', 100)
+
+    assert api.query_order('oid')['status'] == 'Filled'
+
+    assert api.set_order_route(oldroute)
+
 def test_trade_submission_error_bad_symbol(api):
     o = api.market_order('BADSYMBOL', 100)
     assert o
@@ -428,7 +449,7 @@ def test_trade_submission_error_bad_quantity(api):
 #    def json_stoplimit_order(self, args, d): 
 #        """stoplimit_order('symbol', stop_price, limit_price, quantity) => {'field':, data, ...} 
 
-@pytest.mark.barchart
+@pytest.mark.bars
 def dont_test_bars(api): 
     sbar = '2017-07-06 09:30:00' 
     ebar = '2017-07-06 09:40:00' 

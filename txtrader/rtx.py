@@ -611,7 +611,7 @@ class RTX():
         self.config = Config(self.channel)
         self.api_hostname = self.config.get('API_HOST')
         self.api_port = int(self.config.get('API_PORT'))
-        self.current_route = self.config.get('API_ROUTE')
+        self.set_order_route(self.config.get('API_ROUTE'), None)
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
         self.http_port = int(self.config.get('HTTP_PORT'))
@@ -1016,7 +1016,16 @@ class RTX():
 
         o['BUYORSELL']='Buy' if quantity > 0 else 'Sell' # Buy Sell SellShort
         o['GOOD_UNTIL']='DAY' # DAY or YYMMDDHHMMSS
-        o['EXIT_VEHICLE']=self.current_route
+        route = self.order_route.keys()[0]
+        o['EXIT_VEHICLE']=route
+        
+        # if order_route has a value, it is a dict of order route parameters
+        if self.order_route[route]:
+            for k,v in self.order_route[route].items():
+                # encode strategy parameters in 0x01 delimited format
+                if k == 'STRAT_PARAMETERS':
+                    v = ''.join(['%s\x1F%s\x01' % i for i in v.items()])
+                o[k]=v
 
         o['DISP_NAME']=symbol
         o['STYP']=RTX_STYPE # stock
@@ -1081,7 +1090,7 @@ class RTX():
         """called when order has been submitted with 'poke' and OnOtherAck has returned""" 
         self.output('order submitted: %s' % repr(data))
 
-    def process_cancel_order(self, oid, callback, staged=''):
+    def cancel_order(self, oid, callback):
         self.output('cancel_order %s' % oid)
         cb = API_Callback(self, oid, 'cancel_order', callback)
         order = self.orders[oid] if oid in self.orders else None
@@ -1090,19 +1099,16 @@ class RTX():
                 cb.complete({'status': 'Error', 'errorMsg': 'Already canceled.', 'id': oid})
             else:
                 msg=OrderedDict({})
-                msg['TYPE']='UserCancel%sOrder' % staged
+                #for fid in ['DISP_NAME', 'STYP', 'ORDER_TAG', 'EXIT_VEHICLE']:
+                #    if fid in order.fields:
+                #        msg[fid] = order.fields[fid]
+                msg['TYPE']='UserSubmitCancel'
                 msg['REFERS_TO_ID']=oid
                 fields= ','.join(['%s=%s' %(i,v) for i,v in msg.iteritems()])
                 self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
                 self.cancel_callbacks.append(cb)
         else:
             cb.complete({'status': 'Error', 'errorMsg': 'Order not found', 'id': oid})
-
-    def cancel_order(self, oid, callback):
-        self.process_cancel_order(oid, callback, '')
-
-    def cancel_staged_order(self, oid, callback):
-        self.process_cancel_order(oid, callback, 'Staged')
 
     def symbol_enable(self, symbol, client, callback):
         self.output('symbol_enable(%s,%s,%s)' % (symbol, client, callback))
@@ -1220,3 +1226,16 @@ class RTX():
 
     def query_connection_status(self):
         return self.connection_status
+
+    def set_order_route(self, route, callback):
+        if type(route) == str or type(route) == unicode:
+            if route.startswith('{'):
+                route = json.loads(route)
+            else:
+                route = {route: None}
+        self.order_route = route
+        if callback:
+            self.get_order_route(callback)
+
+    def get_order_route(self, callback):
+        API_Callback(self, 0, 'get_order_route', callback).complete(self.order_route)

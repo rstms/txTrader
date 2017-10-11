@@ -16,7 +16,6 @@ from twisted.web.server import Site, NOT_DONE_YET
 from twisted.web.resource import Resource
 from twisted.internet import reactor, endpoints, defer
 
-
 from pprint import pprint
 import sys
 from datetime import datetime
@@ -223,14 +222,6 @@ class webserver(object):
         oid = str(args['id'])
         self.api.cancel_order(oid, d)
 
-    def json_cancel_staged_order(self, args, d):
-        """cancel_staged_order('id')
-
-        Request cancellation of a pending staged order
-        """
-        oid = str(args['id'])
-        self.api.cancel_staged_order(oid, d)
-
     def json_global_cancel(self, args, d):
         """global_cancel()
 
@@ -277,8 +268,20 @@ class webserver(object):
         quantity = int(args['quantity'])
         self.api.stage_market_order(tag, symbol, quantity, d)
 
-    def json_create_staged_order_ticket(self, args, d):
-        self.api.create_staged_order_ticket(d)
+    def json_get_order_route(self, args, d):
+        """get_order_route() => {'route_name', None | {parameter_name: parameter_value, ...}}
+        
+        Return current order route as a dict
+        """
+        self.api.get_order_route(d)
+
+    def json_set_order_route(self, args, d):
+        """set_order_route(route) => True if success, else False
+
+        Set order route data given route {'route_name': {parameter: value, ...}}
+        """
+        route = args['route']
+        self.api.set_order_route(route, d)
 
     def json_help(self, args, d):
         help = {}

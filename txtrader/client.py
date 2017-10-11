@@ -15,6 +15,7 @@ import os
 import sys
 import requests
 from types import *
+import json
 
 from txtrader.version import VERSION
 from txtrader.config import Config
@@ -43,13 +44,14 @@ class API():
             'query_symbol': (self.query_symbol, True, ('symbol',)),
             'query_symbols': (self.query_symbols, True, ()),
             'set_account': (self.set_account, False, ('account',)),
+            'set_order_route': (self.set_order_route, True, ('route',)),
+            'get_order_route': (self.get_order_route, True, ()),
             'query_accounts': (self.query_accounts, False, ()),
             'query_account': (self.query_account, True, ('account', 'fields')),
             'query_positions': (self.query_positions, True, ()),
             'query_orders': (self.query_orders, True, ()),
             'query_order': (self.query_order, True, ('order_id',)),
             'cancel_order': (self.cancel_order, True, ('order_id',)),
-            'cancel_staged_order': (self.cancel_staged_order, True, ('order_id',)),
             'query_executions': (self.query_executions, True, ()),
             'market_order': (self.market_order, True, ('symbol', 'quantity')),
             'create_staged_order_ticket': (self.create_staged_order_ticket, True, ()),
@@ -155,9 +157,6 @@ class API():
     def cancel_order(self, *args):
         return self.call_txtrader_api('cancel_order', {'id': args[0]})
 
-    def cancel_staged_order(self, *args):
-        return self.call_txtrader_api('cancel_staged_order', {'id': args[0]})
-
     def query_executions(self, *args):
         return self.call_txtrader_api('query_executions', {})
 
@@ -197,9 +196,15 @@ class API():
     def set_primary_exchange(self, *args):
         return self.call_txtrader_api('set_primary_exchange', {'symbol': args[0], 'exchange': args[1]})
 
+    def get_order_route(self, *args):
+        return self.call_txtrader_api('get_order_route', {})
+
+    def set_order_route(self, *args):
+        route = args[0]
+        print('route: %s' % repr(route))
+        return self.call_txtrader_api('set_order_route', {'route': route})
 
 if __name__=='__main__':
-    import ujson as json
     from sys import argv
     flags=[]
     while argv[1].startswith('-'):

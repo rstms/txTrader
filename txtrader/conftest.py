@@ -15,18 +15,18 @@ import pytest
 def pytest_addoption(parser):
 
     parser.addoption("--runstaged", action="store_true", default=False, help="run staged order tests")
+    parser.addoption("--runalgo", action="store_true", default=False, help="run algo order tests")
     parser.addoption("--runbars", action="store_true", default=False, help="run barchart tests")
 
 def pytest_collection_modifyitems(config, items):
 
-    if not config.getoption("--runstaged"):
-        skip_staged = pytest.mark.skip(reason="need --runstaged option to run")
-        for item in items:
-            if "staged" in item.keywords:
-                item.add_marker(skip_staged)
+    def modify(option, reason, tag):
+        if not config.getoption(option):
+            marker = pytest.mark.skip(reason=reason)
+            for item in items:
+                if tag in item.keywords:
+                    item.add_marker(marker)
 
-    if not config.getoption("--runbars"):
-        skip_bars= pytest.mark.skip(reason="need --runbars option to run")
-        for item in items:
-            if "barchart" in item.keywords:
-                item.add_marker(skip_bars)
+    modify('--runstaged', 'need --runstaged option to run', 'staged')
+    modify('--runalgo', 'need --runalgo option to run', 'algo')
+    modify('--runbars', 'need --runbars option to run', 'bars')
