@@ -38,23 +38,7 @@ def test_init(api):
     time.sleep(1)
     print('done')
 
-def test_accounts(api):
-    print()
-    a = api.query_accounts()
-    assert type(a) is list
-    assert len(a)
-    print('accounts=%s' % repr(a))
-    account = a[0]
-    assert api.set_account(account)
-    info = api.query_account(account)
-    assert info
-    print('account[%s] info:' % account)
-    pp = pprint.PrettyPrinter(indent=2)
-    pp.pprint(info)
-
 def test_stock_prices(api):
-    #a = api.query_accounts()
-    #assert api.set_account(a[0])
     s = api.add_symbol('IBM')
     assert s
     s = api.add_symbol('FNORD')
@@ -94,6 +78,9 @@ def test_stock_prices(api):
 
 def test_buy_sell(api):
     print()
+    #account = api.account
+    #print('account=%s' % account)
+    #api.set_account(account)
     print('buying IBM')
     o = api.market_order('IBM', 100)
     assert o
@@ -145,32 +132,40 @@ def test_symbol_price(api):
 
 
 def test_query_accounts(api):
+    test_account = api.account
     accounts = api.query_accounts()
+
     assert type(accounts) == list
     assert accounts
 
     for a in accounts:
         assert type(a) == str or type(a) == unicode 
 
-    a = accounts[0]
-    ret = api.set_account(a)
+
+    assert test_account in accounts
+    ret = api.set_account(test_account)
     assert ret
 
     #print('query_account(%s)...' % a)
-    data = api.query_account(a)
+    data = api.query_account(test_account)
   #print('account[%s]: %s' % (a, repr(data)))
     assert data
     assert type(data)==dict
 
-    if testmode == 'TWS':
+    if testmode == 'RTX':
+        field = 'EXCESS_EQ'
+    elif testmode == 'TWS':
         field = 'LiquidationValue'
-    elif testmode == 'RTX':
-        field = 'CASH_BALANCE'
 
-    sdata = api.query_account(a, field) 
+    # txtrader is expected to set the value _cash to the correct field 
+    assert '_cash' in data.keys()
+    assert float(data['_cash']) == float(data[field])
+    
+    sdata = api.query_account(test_account, field) 
     assert sdata
     assert type(sdata)==dict
-    assert set(sdata.keys()) == set([field])
+    assert field in sdata.keys()
+
   #print('account[%s]: %s' % (a, repr(sdata)))
 
 def _wait_for_fill(api, oid, return_on_error=False):
@@ -213,8 +208,8 @@ def _market_order(api, symbol, quantity, return_on_error=False):
     return oid
 
 def test_trades(api):
-    account = api.query_accounts()[0]
-    api.set_account(account)
+
+    account = api.account
 
     oid = _market_order(api, 'AAPL',1)
 
@@ -247,8 +242,6 @@ def test_trades(api):
 
 @pytest.mark.staged
 def test_staged_trades(api):
-    account = api.query_accounts()[0]
-    api.set_account(account)
 
     t = api.stage_market_order('TEST.%s' % str(time.time()), 'GOOG', 10)
     assert t
@@ -261,8 +254,6 @@ def test_staged_trades(api):
 
 @pytest.mark.staged
 def test_staged_trade_cancel(api):
-    account = api.query_accounts()[0]
-    api.set_account(account)
     t = api.stage_market_order('TEST.%s' % str(time.time()), 'INTC', 10)
     assert t
     assert type(t) == dict
@@ -281,8 +272,6 @@ def test_staged_trade_cancel(api):
 
 @pytest.mark.staged
 def test_staged_trade_execute(api):
-    account = api.query_accounts()[0]
-    api.set_account(account)
     trade_symbol = 'AAPL'
     trade_quantity = 10
     t = api.stage_market_order('TEST.%s' % str(time.time()), trade_symbol, trade_quantity)
@@ -377,8 +366,6 @@ def test_trade_and_query_executions_and_query_order(api):
 def test_algo_order(api):
     print()
 
-    account = api.query_accounts()[0]
-    api.set_account(account)
     ret = api.get_order_route()
     assert type(ret) == dict
     assert len(ret.keys()) == 1

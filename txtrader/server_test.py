@@ -20,7 +20,6 @@ testmode = 'RTX'
 class Server():
     def __init__(self):
         self.mode = os.environ['TXTRADER_TEST_MODE'] if 'TXTRADER_TEST_MODE' in os.environ else 'RTX'
-        self.test_account = os.environ['TXTRADER_TEST_ACCOUNT'] if 'TXTRADER_TEST_ACCOUNT' in os.environ else 'AUTO'
         self.mode = self.mode.upper()
         testmode = self.mode
         print('Starting test txTrader %s server...' % self.mode)
@@ -55,10 +54,7 @@ class Server():
     def init(self):
         self.api = API(self.mode)
         assert self.api
-        if self.test_account == 'AUTO':
-            self.test_account = self.api.query_accounts()[0]
-        self.api.set_account(self.test_account)
-    
+        self.api.set_account(self.api.account)
         return self.api
 
     def __del__(self):
