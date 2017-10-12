@@ -163,44 +163,48 @@ class webserver(object):
         self.api.request_executions(d)
 
     def json_market_order(self, args, d):
-        """market_order('symbol', quantity) => {'field':, data, ...}
+        """market_order('account', 'symbol', quantity) => {'field':, data, ...}
 
         Submit a market order, returning dict containing new order fields
         """
+        account = str(args['account'])
         symbol = str(args['symbol']).upper()
         quantity = int(args['quantity'])
-        self.api.market_order(symbol, quantity, d)
+        self.api.market_order(account, symbol, quantity, d)
 
     def json_limit_order(self, args, d):
-        """limit_order('symbol', price, quantity) => {'field':, data, ...}
+        """limit_order('account', 'symbol', price, quantity) => {'field':, data, ...}
 
         Submit a limit order, returning dict containing new order fields
         """
+        account = str(args['account'])
         symbol = str(args['symbol']).upper()
         price = float(args['limit_price'])
         quantity = int(args['quantity'])
-        self.api.limit_order(symbol, price, quantity, d)
+        self.api.limit_order(account, symbol, price, quantity, d)
 
     def json_stop_order(self, args, d):
-        """stop_order('symbol', price, quantity) => {'field':, data, ...}
+        """stop_order('account', 'symbol', price, quantity) => {'field':, data, ...}
 
         Submit a stop order, returning dict containing new order fields
         """
+        account = str(args['account'])
         symbol = str(args['symbol']).upper()
         price = float(args['stop_price'])
         quantity = int(args['quantity'])
-        self.api.stop_order(symbol, price, quantity, d)
+        self.api.stop_order(account, symbol, price, quantity, d)
 
     def json_stoplimit_order(self, args, d):
-        """stoplimit_order('symbol', stop_price, limit_price, quantity) => {'field':, data, ...}
+        """stoplimit_order('account', 'symbol', stop_price, limit_price, quantity) => {'field':, data, ...}
 
         Submit a stop-limit order, returning dict containing new order fields
         """
+        account = str(args['account'])
         symbol = str(args['symbol']).upper()
         stop_price = float(args['stop_price'])
         limit_price = float(args['limit_price'])
         quantity = int(args['quantity'])
-        self.api.stoplimit_order(symbol, stop_price, limit_price, quantity, d)
+        self.api.stoplimit_order(account, symbol, stop_price, limit_price, quantity, d)
 
     def json_query_bars(self, args, d):
         """query_bars('symbol', bar_period, 'start', 'end')
@@ -259,14 +263,15 @@ class webserver(object):
         self.render(d, self.api.set_primary_exchange(symbol, exchange))
 
     def json_stage_market_order(self, args, d):
-        """stage_market_order(tag, symbol, quantity) => {'fieldname': data, ...}
+        """stage_market_order('tag', 'account', 'symbol', quantity) => {'fieldname': data, ...}
 
         Submit a staged market order (displays as staged in GUI, requiring manual aproval), returning dict containing new order fields
         """
+        account = str(args['account'])
         tag = str(args['tag'])
         symbol = str(args['symbol']).upper()
         quantity = int(args['quantity'])
-        self.api.stage_market_order(tag, symbol, quantity, d)
+        self.api.stage_market_order(tag, account, symbol, quantity, d)
 
     def json_get_order_route(self, args, d):
         """get_order_route() => {'route_name', None | {parameter_name: parameter_value, ...}}

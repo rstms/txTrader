@@ -888,17 +888,21 @@ class RTX():
             self.error_handler(self.id, 'set_account; no data, but no account_request_pending')
             cb.complete(None)
 
-    def process_set_account(self, account_name, callback):
+    def verify_account(self, account_name):
         if account_name in self.accounts:
-            self.current_account = account_name
-            msg = 'current account set to %s' % account_name
-            self.output(msg)
             ret = True
         else:
             msg = 'account %s not found' % account_name
             self.error_handler(self.id, 'set_account(): %s' % msg)
             ret = False
-        self.WriteAllClients('current-account: %s' % self.current_account)
+        return ret
+
+    def process_set_account(self, account_name, callback):
+        ret = self.verify_account(account_name)
+        if ret:
+            self.current_account = account_name
+            self.WriteAllClients('current-account: %s' % self.current_account)
+
         if callback:
             callback.complete(ret)
         else:
@@ -961,27 +965,32 @@ class RTX():
         self.update_connection_status('Connecting')
         self.output('Awaiting startup response from RTX gateway at %s:%d...' % (self.api_hostname, self.api_port))
 
-    def market_order(self, symbol, quantity, callback):
-        return self.submit_order('market', 0, 0, symbol, int(quantity), callback)
+    def market_order(self, account, symbol, quantity, callback):
+        return self.submit_order(account, 'market', 0, 0, symbol, int(quantity), callback)
 
-    def limit_order(self, symbol, limit_price, quantity, callback):
-        return self.submit_order('limit', float(limit_price), 0, symbol, int(quantity), callback)
+    def limit_order(self, account, symbol, limit_price, quantity, callback):
+        return self.submit_order(account, 'limit', float(limit_price), 0, symbol, int(quantity), callback)
 
-    def stop_order(self, symbol, stop_price, quantity, callback):
-        return self.submit_order('stop', 0, float(stop_price), symbol, int(quantity), callback)
+    def stop_order(self, account, symbol, stop_price, quantity, callback):
+        return self.submit_order(account, 'stop', 0, float(stop_price), symbol, int(quantity), callback)
 
-    def stoplimit_order(self, symbol, stop_price, limit_price, quantity, callback):
-        return self.submit_order('stoplimit', float(limit_price), float(stop_price), symbol, int(quantity), callback)
+    def stoplimit_order(self, account, symbol, stop_price, limit_price, quantity, callback):
+        return self.submit_order(account, 'stoplimit', float(limit_price), float(stop_price), symbol, int(quantity), callback)
 
-    def stage_market_order(self, tag, symbol, quantity, callback):
-        return self.submit_order('market', 0, 0, symbol, int(quantity), callback, staged=tag)
+    def stage_market_order(self, tag, account, symbol, quantity, callback):
+        return self.submit_order(account, 'market', 0, 0, symbol, int(quantity), callback, staged=tag)
 
     def create_order_id(self):
         return str(uuid1())
 
-    def create_staged_order_ticket(self, callback):
+    def create_staged_order_ticket(self, account, callback):
+
+        if not self.verify_account(account):
+          API_Callback(self, 0, 'create-staged-order-ticket', callback).complete({'status': 'Error', 'errorMsg': 'account unknown'})
+          return
         o=OrderedDict({})
-        bank, branch, customer, deposit = self.current_account.split('.')[:4]
+        self.verify_account(account)
+        bank, branch, customer, deposit = account.split('.')[:4]
         o['BANK']=bank
         o['BRANCH']=branch
         o['CUSTOMER']=customer
@@ -1006,9 +1015,15 @@ class RTX():
         """called when staged order ticket request has been submitted with 'poke' and OnOtherAck has returned""" 
         self.output('staged order ticket submitted: %s' % repr(data))
 
-    def submit_order(self, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
+    def submit_order(self, account, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
+
+        if not self.verify_account(account):
+          API_Callback(self, 0, 'submit-order', callback).complete({'status': 'Error', 'errorMsg': 'account unknown'})
+          return
+        #bank, branch, customer, deposit = self.current_account.split('.')[:4]
+
         o=OrderedDict({})
-        bank, branch, customer, deposit = self.current_account.split('.')[:4]
+        bank, branch, customer, deposit = account.split('.')[:4]
         o['BANK']=bank
         o['BRANCH']=branch
         o['CUSTOMER']=customer

@@ -165,23 +165,23 @@ class API():
 
     def market_order(self, *args):
         symbol, quantity = args[0:2]
-        return self.call_txtrader_api('market_order', {'symbol': symbol, 'quantity': int(quantity)})
+        return self.call_txtrader_api('market_order', {'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
 
     def stage_market_order(self, *args):
         tag, symbol, quantity = args[0:3]
-        return self.call_txtrader_api('stage_market_order', {'tag': tag, 'symbol': symbol, 'quantity': int(quantity)})
+        return self.call_txtrader_api('stage_market_order', {'tag': tag, 'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
 
     def limit_order(self, *args):
         symbol, limit_price, quantity = args[0:3]
-        return self.call_txtrader_api('limit_order', {'symbol': symbol, 'limit_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_api('limit_order', {'account': self.account, 'symbol': symbol, 'limit_price': float(limit_price), 'quantity': int(quantity)})
 
     def stop_order(self, *args):
         symbol, stop_price, quantity = args[0:3]
-        return self.call_txtrader_api('stop_order', {'symbol': symbol, 'stop_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_api('stop_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'quantity': int(quantity)})
 
     def stoplimit_order(self, *args):
         symbol, stop_price, limit_price, quantity = args[0:4]
-        return self.call_txtrader_api('stoplimit_order', {'symbol': symbol, 'stop_price': float(limit_price), 'limit_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_api('stoplimit_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'limit_price': float(limit_price), 'quantity': int(quantity)})
 
     def global_cancel(self, *args):
         return self.call_txtrader_api('global_cancel', {})
