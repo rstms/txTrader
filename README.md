@@ -213,8 +213,8 @@ uptime() => 'uptime string'
 Environment Varialbles
 ----------------------
 
-These variables are found in `etc/txtrader` and copied to `/etc/txtrader` at installation.    They are
-loaded into the environment with `envdir` by the daemontools run script.
+The default values for these configuration variables are copied from `etc/txtrader` to `/etc/txtrader` at installation.  They are
+loaded into the environment with `envdir` by the service run script.
 
 Variable			| Description
 ------------------------------- | --------------------------------------------------
@@ -232,13 +232,13 @@ TXTRADER_HTTP_PORT              | port used by client for txTrader JSON over HTT
 TXTRADER_LOG_API_MESSAGES       | switch API message i/o logging
 TXTRADER_DEBUG_API_MESSAGES     | switch API message i/o hex dump
 TXTRADER_LOG_CLIENT_MESSAGES    | switch client message output
-TXTRADER_MODE                   | backend mode tws|rtx|cqg
+TXTRADER_MODE                   | backend mode (tws, rtx, cqg)
 TXTRADER_PASSWORD               | password for HTTP session
 TXTRADER_SUPPRESS_ERROR_CODES   | list of error codes to ignore (TWS)
 TXTRADER_TCP_PORT               | port used by client for txTrader ASCII output
 TXTRADER_TEST_ACCOUNT		| account used for regression test
 TXTRADER_USERNAME               | username for HTTP session 
-TXTRADER_VENV                   | virtualenv directory (used by run script)
+TXTRADER_VENV                   | virtualenv directory (used by run script, cli script)
 
 
 Service
