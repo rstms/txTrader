@@ -239,3 +239,13 @@ TXTRADER_TCP_PORT               | port used by client for txTrader ASCII output
 TXTRADER_TEST_ACCOUNT		| account used for regression test
 TXTRADER_USERNAME               | username for HTTP session 
 TXTRADER_VENV                   | virtualenv directory (used by run script)
+
+
+Service
+-------
+txTrader is designed to run under [daemontools](http://cr.yp.to/daemontools.html)
+
+The configuration files service/txtrader are the service template files.
+
+An additional convention is added:  if a file named `disable` is present in the service directory
+at startup time, the service prints "Disabled" to its log and sleeps for a minute before restarting.
