@@ -842,7 +842,8 @@ class RTX():
                 self.orders[oid]=o
                 o.update(msg)
         else:
-            self.error_handler(self.id, 'handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
+            #self.error_handler(self.id, 'handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
+            self.output('UNKNOWN_ORDER: handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
 
     def handle_ticket_update(self, cxn, msg):
         return self.handle_ticket_response(msg)
