@@ -61,6 +61,15 @@ class webserver(object):
         uptime = datetime.now() - self.started
         self.render(d, 'started %s (elapsed %s)' % (self.started.strftime('%Y-%m-%d %H:%M:%S'), str(uptime)))
 
+
+    def json_time(self, args, d):
+        """time() => 'time string'
+
+        Return formatted timestamp string (YYYY-MM-DD HH:MM:SS) matching latest datafeed time update
+        """
+        t = self.api.now
+        self.render(d, '%s' % (t.strftime('%Y-%m-%d %H:%M:%S') if t else t))
+
     def json_version(self, args, d):
         """version() => 'version string'
 
@@ -322,13 +331,14 @@ class Leaf(Resource):
         d = defer.Deferred()
         d.addCallback(request.write)
         d.addCallback(lambda ign: request.finish())
-        d.addErrback(self.api_error)
+        d.addErrback(self.api_error, request)
         d.addErrback(lambda ign: request.finish())
         self.cmdfunc(data, d)
         return NOT_DONE_YET
 
-    def api_error(self, failure):
+    def api_error(self, failure, request):
         self.root.output('ERROR: API errback: %s' % repr(failure))
+        request.setResponseCode(500)
         return failure
 
 

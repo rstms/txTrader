@@ -36,6 +36,7 @@ class API():
             'help': (self.help, False, ()),
             'status': (self.status, False, ()),
             'version': (self.version, False, ()),
+            'time': (self.time, False, ()),
             'shutdown': (self.shutdown, False, ()),
             'uptime': (self.uptime, False, ()),
             'query_bars': (self.query_bars, True, ('symbol', 'interval', 'start_time', 'end_time')),
@@ -100,6 +101,9 @@ class API():
 
     def uptime(self, *args):
         return self.call_txtrader_api('uptime', {})
+
+    def time(self, *args):
+        return self.call_txtrader_api('time', {})
 
     def query_bars(self, *args):
         args = {

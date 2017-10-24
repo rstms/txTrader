@@ -17,6 +17,9 @@ import ujson as json
 import time
 from collections import OrderedDict
 from hexdump import hexdump
+import pytz
+import tzlocal
+import datetime
 
 from txtrader.config import Config
 
@@ -427,6 +430,8 @@ class RTX_Connection():
         self.service = service
         self.topic = topic
         self.key = '%s;%s' % (service, topic)
+        self.last_query = ''
+        self.api.output('Creating %s' % repr(self))
         self.api.cxn_register(self)
         self.api.gateway_send('connect %s %s' % (self.id, self.key))
         self.ack_pending = 'CONNECTION PENDING'
@@ -442,6 +447,12 @@ class RTX_Connection():
         self.connected = False
         self.on_connect_action = None
         self.update_ready()
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return '<RTX_Connection instance at %s %s %s %s>' % (hex(id(self)), self.id, self.key, self.last_query)
 
     def update_ready(self):
         self.ready = not(
@@ -508,7 +519,7 @@ class RTX_Connection():
                     if self.on_connect_action:
                         self.ready = True
                         cmd, arg, exa, cba, exr, cbr, exs, cbs, cbu, uhr = self.on_connect_action
-                        self.api.output('Sending on_connect_action: %s' % repr(self.on_connect_action))
+                        self.api.output('%s sending on_connect_action: %s' % (repr(self), repr(self.on_connect_action)))
                         self.send(cmd, arg, exa, cba, exr, cbr, exs, cbs, cbu, uhr)
                         self.on_connect_action = None
                         print('after on_connect_action send: self.status_pending=%s' % self.status_pending)
@@ -520,6 +531,9 @@ class RTX_Connection():
                 self.api.error_handler(self.id, 'Status Error: %s' % data)
         else:
             self.api.error_handler(self.id, 'Status Unexpected: %s' % data)
+            # if ADVISE is active; call handler function with None to notifiy caller the advise has been terminated
+            if self.update_handler and data['msg']=='OnTerminate':
+                self.update_handler(self, None)
 
     def handle_update(self, data):
         if self.log:
@@ -535,6 +549,7 @@ class RTX_Connection():
 
     def query(self, cmd, table, what, where, ex_ack=None, cb_ack=None, ex_response=None, cb_response=None, ex_status=None, cb_status=None, cb_update=None, update_handler=None):
         tql='%s;%s;%s' % (table, what, where)
+        self.last_query='%s: %s' % (cmd, tql)
         ret = self.send(cmd, tql, ex_ack, cb_ack, ex_response, cb_response, ex_status, cb_status, cb_update, update_handler)
 
     def request(self, table, what, where, callback):
@@ -550,12 +565,16 @@ class RTX_Connection():
         return self.query('unadvise', table, what, where, 'UNADVISE_OK', None, None, None, 'OnOtherAck', callback)
 
     def poke(self, table, what, where, data, callback):
-        return self.send('poke', '%s;%s;%s!%s' % (table, what, where, data), "POKE_OK", None, None, None, 'OnOtherAck', callback)
+        tql = '%s;%s;%s!%s' % (table, what, where, data)
+        self.last_query = 'poke: %s' % tql
+        return self.send('poke', tql, "POKE_OK", None, None, None, 'OnOtherAck', callback)
 
     def execute(self, command, callback):
+        self.last_query = 'execute: %s' % command
         return self.send('execute', command, "EXECUTE_OK", callback)
 
     def terminate(self, code, callback):
+        self.last_query = 'terminate: %s' % str(code) 
         return self.send('terminate', str(code), "TERMINATE_OK", callback)
 
     def send(self, cmd, args, ex_ack=None, cb_ack=None, ex_response=None, cb_response=None, ex_status=None, cb_status=None, cb_update=None, update_handler=None):
@@ -577,7 +596,7 @@ class RTX_Connection():
                 self.api.error_handler(self.id, 'Failure: on_connect_action already exists: %s' % repr(self.on_connect_action))
                 ret = False
             else:
-                self.api.output('storing on_connect_action...%s' % self)
+                self.api.output('%s storing on_connect_action (%s)...' % (self, cmd))
                 self.on_connect_action = (cmd, args, ex_ack, cb_ack, ex_response, cb_response, ex_status, cb_status, cb_update, update_handler)
                 ret = True
         return ret
@@ -623,6 +642,9 @@ class RTX():
         self.log_client_messages = bool(int(self.config.get('LOG_CLIENT_MESSAGES')))
         self.log_order_updates = bool(int(self.config.get('LOG_ORDER_UPDATES')))
         self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
+        self.now = None
+        self.feedzone = pytz.timezone(self.config.get('API_TIMEZONE'))
+        self.localzone = tzlocal.get_localzone()
         if not self.callback_timeout:
             self.callback_timeout = DEFAULT_CALLBACK_TIMEOUT
         self.output('callback_timeout=%d' % self.callback_timeout)
@@ -815,7 +837,10 @@ class RTX():
                 cblist.remove(cb)
 
     def handle_order_update(self, cxn, msg):
-        return self.handle_order_response(msg)
+        if msg:
+          self.handle_order_response(msg)
+        else:
+          self.force_disconnect('Realtick Gateway Order Status ADVISE connection has been terminated; connection has failed')
 
     def handle_order_response(self, msg):
         #print('---handle_order_response: %s' % repr(msg))
@@ -947,18 +972,21 @@ class RTX():
     def handle_time(self, rows):
         rows = json.loads(rows)
         if rows:
-            field = rows[0]['TRDTIM_1']
-            if field == 'Error 17':
+            time_field = rows[0]['TRDTIM_1']
+            date_field = rows[0]['TRD_DATE']
+            if time_field == 'Error 17':
                 # this indicates the $TIME symbol is not found on the server, which happens when the login has failed
                 self.force_disconnect('Realtick Gateway reports $TIME symbol unknown; connection has failed')
             
-            elif field.lower().startswith('error'):
-                self.error_handler(self.id, 'handle_time: time field %s' % field)
+            elif time_field.lower().startswith('error'):
+                self.error_handler(self.id, 'handle_time: time field %s' % time_field)
             else:
-                hour, minute = [int(i) for i in field.split(':')[0:2]]
+                year, month, day = [int(i) for i in date_field.split('-')[0:3]]
+                hour, minute, second = [int(i) for i in time_field.split(':')[0:3]]
+                self.now = self.feedzone.localize(datetime.datetime(year,month,day,hour,minute,second)).astimezone(self.localzone)
                 if minute != self.last_minute:
                     self.last_minute = minute
-                    self.WriteAllClients('time: %s %02d:%02d:00' % (rows[0]['TRD_DATE'], hour, minute))
+                    self.WriteAllClients('time: %s %s:00' % (self.now.strftime('%Y-%m-%d'), self.now.strftime('%H:%M')))
         else:
             self.error_handler(self.id, 'handle_time: unexpected null input')
 
