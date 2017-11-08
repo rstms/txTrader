@@ -133,6 +133,7 @@ def test_symbol_price(api):
 
 def test_query_accounts(api):
     test_account = api.account
+
     accounts = api.query_accounts()
 
     assert type(accounts) == list
@@ -141,10 +142,15 @@ def test_query_accounts(api):
     for a in accounts:
         assert type(a) == str or type(a) == unicode 
 
-
     assert test_account in accounts
     ret = api.set_account(test_account)
     assert ret
+
+    ret =  api.query_account('b.b.b.INVALID_ACCOUNT')
+    assert ret == None
+
+    ret = api.query_account(test_account, 'INVALID_FIELD')
+    assert ret == None
 
     #print('query_account(%s)...' % a)
     data = api.query_account(test_account)

@@ -386,8 +386,8 @@ class API_Callback():
         return json.dumps(results)
 
     def format_account_data(self, rows):
-        data = rows[0]
-        if 'EXCESS_EQ' in data:
+        data = rows[0] if rows else rows
+        if data and 'EXCESS_EQ' in data:
             data['_cash'] = float(data['EXCESS_EQ'])
         return data
 
@@ -482,6 +482,7 @@ class RTX_Connection():
                 self.ack_pending = None
             else:
                 self.api.error_handler(self.id, 'Ack Mismatch: expected %s, got %s' % (self.ack_pending, data))
+                self.handle_response_failure()
             if self.ack_callback:
                 self.ack_callback.complete(data)
                 self.ack_callback = None
@@ -501,6 +502,10 @@ class RTX_Connection():
                 self.response_rows = None
         else:
             self.api.error_handler(id, 'Response Unexpected: %s' % data)
+
+    def handle_response_failure(self):
+        if self.response_callback:
+            self.response_callback.complete(None)
 
     def handle_status(self, data):
         if self.log:
@@ -534,6 +539,7 @@ class RTX_Connection():
             # if ADVISE is active; call handler function with None to notifiy caller the advise has been terminated
             if self.update_handler and data['msg']=='OnTerminate':
                 self.update_handler(self, None)
+            self.handle_response_failure()
 
     def handle_update(self, data):
         if self.log:
