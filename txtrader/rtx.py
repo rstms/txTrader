@@ -407,8 +407,14 @@ class API_Callback():
 	#print('format_positions: rows=%s' % repr(rows))
         for pos in rows:
             if pos:
+	        #print('format_positions: pos=%s' % repr(pos))
                 account = self.api.make_account(pos)
-                positions[account][pos['DISP_NAME']] = int(pos['LONGPOS']) - int(pos['SHORTPOS'])
+                symbol = pos['DISP_NAME']
+                positions[account].setdefault(symbol, 0)
+                # if LONG positions exist, add them, if SHORT positions exist, subtract them
+                for m,f in [(1,'LONGPOS'), (1, 'LONGPOS0'), (-1, 'SHORTPOS'), (-1, 'SHORTPOS0')]:
+                    if f in pos:
+                        positions[account][symbol] += m * int(pos[f])
         return positions
 
     def format_orders(self, rows):
