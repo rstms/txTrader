@@ -122,6 +122,7 @@ class API_Symbol():
         return str(self)
 
     def export(self):
+
         return {
             'symbol': self.symbol,
             'bid': self.bid,
@@ -162,8 +163,16 @@ class API_Symbol():
     def init_handler(self, data):
         data = json.loads(data)
         self.output('API_Symbol init: %s' % data)
-        self.rawdata = data
         self.parse_fields(None, data[0])
+        self.rawdata = data[0]
+        # Error 0 - FieldNotFound
+        # Error 2 - FieldNoValue indicates field is valid but no value has been set
+        # Error 3 - NotPermissioned 
+        # Error 17 - NoRecord
+        # Error 256 - FieldReset
+        for k,v in self.rawdata.items():
+            if v.startswith('Error '):
+                self.rawdata[k]=''
         if self.api.symbol_init(self):
             self.cxn = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
             self.cxn.advise('LIVEQUOTE', 'TRDPRC_1,TRDVOL_1,BID,BIDSIZE,ASK,ASKSIZE,ACVOL_1',
@@ -967,7 +976,7 @@ class RTX():
 
     def error_handler(self, id, msg):
         """report error messages"""
-        self.output('ERROR: %s %s' % (id, msg))
+        self.output('ALERT: %s %s' % (id, msg))
         self.WriteAllClients('error: %s %s' % (id, msg))
 
     def force_disconnect(self, reason):
@@ -1172,7 +1181,7 @@ class RTX():
         self.output('symbol_enable: symbols=%s' % repr(self.symbols))
 
     def symbol_init(self, symbol):
-        ret = not 'SYMBOL_ERROR' in symbol.rawdata[0].keys()
+        ret = not 'SYMBOL_ERROR' in symbol.rawdata.keys()
         if not ret:
             self.symbol_disable(symbol.symbol, list(symbol.clients)[0])
         symbol.callback.complete(ret)
@@ -1260,7 +1269,7 @@ class RTX():
         self.output('global cancel: %s' % repr(data))
 
     def query_bars(self, symbol, period, bar_start, bar_end, callback):
-        self.error_handler(self.id, 'ERROR: query_bars unimplemented')
+        self.error_handler(self.id, 'ALERT: query_bars unimplemented')
         return None
 
     def handle_historical_data(self, msg):

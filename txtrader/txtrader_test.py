@@ -33,19 +33,27 @@ def dump(label, o):
 
 def test_init(api):
     print()
+    print('test_init checking api')
     assert api 
     print('waiting 1 second...')
     time.sleep(1)
     print('done')
 
 def test_stock_prices(api):
+
     s = api.add_symbol('IBM')
     assert s
+
     s = api.add_symbol('FNORD')
     assert not s
+
     s = api.query_symbol('IBM')
     assert s
     dump('Symbol data for IBM', s)
+
+    r = api.query_symbol_data('IBM')
+    assert r
+    dump('raw data for IBM', r)
 
     l = api.query_symbols()
     assert l
@@ -97,6 +105,30 @@ def test_buy_sell(api):
     assert 'permid' in o.keys()
     assert 'status' in o.keys()
     dump('market_order(IBM,100)', o)
+
+def test_partial_fill(api):
+    print()
+    quantity = 10000
+    symbol = 'COWN'
+    print('buying %d %s' % (quantity, symbol))
+    p = api.add_symbol(symbol)
+    assert p
+    o = api.market_order(symbol, quantity)
+    assert o
+    assert 'permid' in o.keys()
+    assert 'status' in o.keys()
+    assert not o['status'] == 'Filled'
+    oid = o['permid']
+    print('oid=%s' % oid)
+    while o['status'] != 'Filled':
+         o = api.query_order(oid)
+         status = o['status']
+         filled = o['filled'] if 'filled' in o.keys() else None 
+         remaining = o['remaining'] if 'remaining' in o.keys() else None 
+         average_price = o['avgfillprice'] if 'avgfillprice' in o.keys() else None
+         print('status=%s filled=%s remaining=%s average_price=%s' % (status, filled, remaining, average_price))
+         assert not (status=='Filled' and filled < quantity)
+    o = api.market_order(symbol, quantity*-1)
 
 def test_status(api):
     assert api.status() == 'Up'

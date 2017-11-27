@@ -115,6 +115,17 @@ class webserver(object):
             ret = self.api.symbols[symbol].export()
         self.render(d, ret)
 
+    def json_query_symbol_data(self, args, d):
+        """query_symbol_data('symbol') => {'fieldname': data, ...}
+
+        Return dict containing rawdata for given symbol
+        """
+        symbol = str(args['symbol']).upper()
+        ret = None
+        if symbol in self.api.symbols.keys():
+            ret = self.api.symbols[symbol].rawdata
+        self.render(d, ret)
+
     def json_query_accounts(self, args, d):
         """query_accounts() => ['account_name', ...]
 
@@ -337,7 +348,7 @@ class Leaf(Resource):
         return NOT_DONE_YET
 
     def api_error(self, failure, request):
-        self.root.output('ERROR: API errback: %s' % repr(failure))
+        self.root.output('ALERT: API errback: %s' % repr(failure))
         request.setResponseCode(500)
         return failure
 

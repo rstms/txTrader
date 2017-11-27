@@ -152,6 +152,10 @@ query_positions() => {'account': {'fieldname': data, ...}, ...}
 query_symbol('symbol') => {'fieldname': data, ...}
 
         Return dict containing current data for given symbol
+
+query_symbol_data('symbol') => {'fieldname': data, ...}
+
+        Return dict containing rawdata for given symbol
         
 
 query_symbols() => ['symbol', ...]

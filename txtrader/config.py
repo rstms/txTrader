@@ -24,5 +24,5 @@ class Config():
             #print('Config.get(%s): %s not found in %s' % (key, name, environ.keys()))
             name = 'TXTRADER_%s' % key
         if not name in environ.keys():
-            print('ERROR: Config.get(%s) failed' % key)
+            print('ALERT: Config.get(%s) failed' % key)
         return environ[name]

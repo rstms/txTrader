@@ -126,6 +126,9 @@ class API():
     def query_symbol(self, *args):
         return self.call_txtrader_api('query_symbol', {'symbol': args[0]})
 
+    def query_symbol_data(self, *args):
+        return self.call_txtrader_api('query_symbol_data', {'symbol': args[0]})
+
     def query_accounts(self, *args):
         return self.call_txtrader_api('query_accounts', {})
 

@@ -20,7 +20,7 @@ TEST_PORT = 7497
 TEST_ACCOUNT = AUTO
 
 default:
-	@echo "\nQuick Start Commands:\n\nsudo make config; make build; make venv; sudo make install; make run\n"
+	@echo "\nQuick Start Commands:\n\nsudo make clean && sudo make config && make build && make venv && sudo make install && make run\n"
 
 clean:
 	@echo "Cleaning up..."
