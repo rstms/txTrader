@@ -165,11 +165,6 @@ class API_Symbol():
         self.output('API_Symbol init: %s' % data)
         self.parse_fields(None, data[0])
         self.rawdata = data[0]
-        # Error 0 - FieldNotFound
-        # Error 2 - FieldNoValue indicates field is valid but no value has been set
-        # Error 3 - NotPermissioned 
-        # Error 17 - NoRecord
-        # Error 256 - FieldReset
         for k,v in self.rawdata.items():
             if v.startswith('Error '):
                 self.rawdata[k]=''
@@ -181,31 +176,32 @@ class API_Symbol():
     def parse_fields(self, cxn, data):
         trade_flag = False
         quote_flag = False
+        pid = 'API_Symbol(%s)' % self.symbol
         if 'TRDPRC_1' in data.keys():
-            self.last = float(data['TRDPRC_1'])
+            self.last = self.api.parse_tql_float(data['TRDPRC_1'], pid)
             trade_flag = True
         if 'TRDVOL_1' in data.keys():
-            self.size = int(data['TRDVOL_1'])
+            self.size = self.api.parse_tql_int(data['TRDVOL_1'], pid)
             trade_flag = True
         if 'ACVOL_1' in data.keys():
-            self.volume = int(data['ACVOL_1'])
+            self.volume = self.api.parse_tql_int(data['ACVOL_1'], pid)
             trade_flag = True
         if 'BID' in data.keys():
-            self.bid = float(data['BID'])
+            self.bid = self.api.parse_tql_float(data['BID'], pid)
             quote_flag = True
         if 'BIDSIZE' in data.keys():
-            self.bidsize = int(data['BIDSIZE'])
+            self.bidsize = self.api.parse_tql_int(data['BIDSIZE'], pid)
             quote_flag = True
         if 'ASK' in data.keys():
-            self.ask = float(data['ASK'])
+            self.ask = self.api.parse_tql_float(data['ASK'], pid)
             quote_flag = True
         if 'ASKSIZE' in data.keys():
-            self.asksize = int(data['ASKSIZE'])
+            self.asksize = self.api.parse_tql_int(data['ASKSIZE'], pid)
             quote_flag = True
         if 'COMPANY_NAME' in data.keys():
-            self.fullname = data['COMPANY_NAME']
+            self.fullname = self.api.parse_tql_str(data['COMPANY_NAME'], pid)
         if 'HST_CLOSE' in data.keys():
-            self.close = float(data['HST_CLOSE'])
+            self.close = self.api.parse_tql_float(data['HST_CLOSE'], pid)
 
         if self.api.enable_ticker:
             if quote_flag:
@@ -990,14 +986,45 @@ class RTX():
         self.error_handler(self.id, 'API Disconnect: %s' % reason)
         reactor.stop()
 
+    def parse_tql_float(self, data, pid):
+        ret = self.parse_tql_field(data, pid):
+        return float(ret) if ret or 0.0
+
+    def parse_tql_int(self, data, pid):
+        ret = self.parse_tql_field(data, pid):
+        return int(ret) if ret or 0
+
+    def parse_tql_str(self, data, pid):
+        ret = self.parse_tql_field(data, pid):
+        return str(ret) if ret or ''
+
+    def parse_tql_field(self, data, pid):
+        if data.lower().startswith('error '):
+            if data.lower()=='error 0':
+                code = 'Field Not Found'
+            elif data.lower() == 'error 2'):
+                code = 'Field No Value'
+            elif data.lower() == 'error 3'):
+                code = 'Field Not Permissioned'
+            elif data.lower() == 'error 17'):
+                code = 'No Record Exists'
+            elif data.lower() == 'error 256'):
+                code = 'Field Reset'
+            else:
+                code = 'Unknown Field Error'
+            self.error_handler(pid, 'Field Parse Failure: %s (%s)' % repr(data, code))
+            ret = None
+        else:
+            ret = field
+
     def handle_time(self, rows):
         rows = json.loads(rows)
         if rows:
             time_field = rows[0]['TRDTIM_1']
             date_field = rows[0]['TRD_DATE']
             if time_field == 'Error 17':
-                # this indicates the $TIME symbol is not found on the server, which happens when the login has failed
-                self.force_disconnect('Realtick Gateway reports $TIME symbol unknown; connection has failed')
+                # this indicates the $TIME symbol is not found on the server, which is a kludge to determine the login has failed
+                self.force_disconnect('Gateway reports $TIME symbol unknown; connection has failed')
             
             elif time_field.lower().startswith('error'):
                 self.error_handler(self.id, 'handle_time: time field %s' % time_field)
