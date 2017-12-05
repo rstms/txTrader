@@ -987,35 +987,35 @@ class RTX():
         reactor.stop()
 
     def parse_tql_float(self, data, pid):
-        ret = self.parse_tql_field(data, pid):
-        return float(ret) if ret or 0.0
+        ret = self.parse_tql_field(data, pid)
+        return float(ret) if ret else 0.0
 
     def parse_tql_int(self, data, pid):
-        ret = self.parse_tql_field(data, pid):
-        return int(ret) if ret or 0
+        ret = self.parse_tql_field(data, pid)
+        return int(ret) if ret else 0
 
     def parse_tql_str(self, data, pid):
-        ret = self.parse_tql_field(data, pid):
-        return str(ret) if ret or ''
+        ret = self.parse_tql_field(data, pid)
+        return str(ret) if ret else ''
 
     def parse_tql_field(self, data, pid):
         if data.lower().startswith('error '):
             if data.lower()=='error 0':
                 code = 'Field Not Found'
-            elif data.lower() == 'error 2'):
+            elif data.lower() == 'error 2':
                 code = 'Field No Value'
-            elif data.lower() == 'error 3'):
+            elif data.lower() == 'error 3':
                 code = 'Field Not Permissioned'
-            elif data.lower() == 'error 17'):
+            elif data.lower() == 'error 17':
                 code = 'No Record Exists'
-            elif data.lower() == 'error 256'):
+            elif data.lower() == 'error 256':
                 code = 'Field Reset'
             else:
                 code = 'Unknown Field Error'
             self.error_handler(pid, 'Field Parse Failure: %s (%s)' % repr(data, code))
             ret = None
         else:
-            ret = field
+            ret = data
 
     def handle_time(self, rows):
         rows = json.loads(rows)
