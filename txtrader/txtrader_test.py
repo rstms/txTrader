@@ -44,12 +44,30 @@ def test_stock_prices(api):
     s = api.add_symbol('IBM')
     assert s
 
-    s = api.add_symbol('FNORD')
-    assert not s
+    p = api.query_symbol('IBM')
+    assert p
 
-    s = api.query_symbol('IBM')
-    assert s
-    dump('Symbol data for IBM', s)
+    assert type(p) == dict
+    print(repr(p))
+
+    tdata = [
+        ('symbol', unicode, True),
+        ('fullname', unicode, True),
+        ('last', float, True),
+        ('size', int, True),
+        ('volume', int, True),
+        ('close', float, True),
+        ('bid', float, False),
+        ('bidsize', int, False),
+        ('ask', float, False),
+        ('asksize', int, False)
+    ]
+
+    for key, _type, required in tdata:
+      assert key in p.keys()
+      assert type(p[key]) == _type
+      if required:
+        assert p[key]
 
     r = api.query_symbol_data('IBM')
     assert r

@@ -170,8 +170,8 @@ class API_Symbol():
                 self.rawdata[k]=''
         if self.api.symbol_init(self):
             self.cxn = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
-            self.cxn.advise('LIVEQUOTE', 'TRDPRC_1,TRDVOL_1,BID,BIDSIZE,ASK,ASKSIZE,ACVOL_1',
-                            "DISP_NAME='%s'" % self.symbol, self.parse_fields)
+            fields = 'TRDPRC_1,TRDVOL_1,BID,BIDSIZE,ASK,ASKSIZE,ACVOL_1'
+            self.cxn.advise('LIVEQUOTE', fields, "DISP_NAME='%s'" % self.symbol, self.parse_fields)
 
     def parse_fields(self, cxn, data):
         trade_flag = False
@@ -472,14 +472,14 @@ class RTX_Connection():
         if self.ready:
             self.api.cxn_activate(self)
 
-    def receive(self, type, data):
-        if type == 'ack':
+    def receive(self, _type, data):
+        if _type == 'ack':
             self.handle_ack(data)
-        elif type == 'response':
+        elif _type == 'response':
             self.handle_response(data)
-        elif type == 'status':
+        elif _type == 'status':
             self.handle_status(data)
-        elif type == 'update':
+        elif _type == 'update':
             self.handle_update(data)
         else:
             self.api.error_handler(self.id, 'Message Type Unexpected: %s' % data)
@@ -1012,10 +1012,11 @@ class RTX():
                 code = 'Field Reset'
             else:
                 code = 'Unknown Field Error'
-            self.error_handler(pid, 'Field Parse Failure: %s (%s)' % repr(data, code))
+            self.error_handler(pid, 'Field Parse Failure: %s (%s)' % (repr(data), code))
             ret = None
         else:
             ret = data
+        return ret
 
     def handle_time(self, rows):
         rows = json.loads(rows)
