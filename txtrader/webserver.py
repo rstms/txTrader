@@ -20,7 +20,7 @@ from pprint import pprint
 import sys
 from datetime import datetime
 import ujson as json
-from txtrader.version import VERSION
+from txtrader.version import VERSION, BUILD
 
 class webserver(object):
     def __init__(self, api):
@@ -76,7 +76,7 @@ class webserver(object):
         Return string containing release version of current server instance
         """
         ret = {}
-        ret['txtrader'] = VERSION
+        ret['txtrader'] = '%s (%s)' % (VERSION, BUILD)
         ret['python'] = sys.version
         #ret['pip'] = check_output('pip list', shell=True)
         self.render(d, ret)
