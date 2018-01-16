@@ -393,7 +393,7 @@ class API_Callback():
     def format_account_data(self, rows):
         data = rows[0] if rows else rows
         if data and 'EXCESS_EQ' in data:
-            data['_cash'] = float(data['EXCESS_EQ'])
+            data['_cash'] = round(float(data['EXCESS_EQ']),2)
         return data
 
     def format_positions(self, rows):
