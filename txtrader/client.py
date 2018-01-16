@@ -43,6 +43,7 @@ class API():
             'add_symbol': (self.add_symbol, True, ('symbol',)),
             'del_symbol': (self.del_symbol, True, ('symbol',)),
             'query_symbol': (self.query_symbol, True, ('symbol',)),
+            'query_symbol_data': (self.query_symbol_data, True, ('symbol',)),
             'query_symbols': (self.query_symbols, True, ()),
             'set_account': (self.set_account, False, ('account',)),
             'set_order_route': (self.set_order_route, True, ('route',)),
