@@ -105,6 +105,7 @@ class API_Symbol():
         self.size = 0
         self.volume = 0
         self.close = 0.0
+        self.vwap = 0.0
         self.rawdata = ''
         self.api.symbols[symbol] = self
         self.last_quote = ''
@@ -116,7 +117,7 @@ class API_Symbol():
         self.cxn.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
 
     def __str__(self):
-        return 'API_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.clients)
+        return 'API_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s vwap=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.vwap, self.clients)
 
     def __repr__(self):
         return str(self)
@@ -133,6 +134,7 @@ class API_Symbol():
             'size': self.size,
             'volume': self.volume,
             'close': self.close,
+            'vwap': self.vwap,
             'fullname': self.fullname
         }
 
@@ -202,6 +204,8 @@ class API_Symbol():
             self.fullname = self.api.parse_tql_str(data['COMPANY_NAME'], pid)
         if 'HST_CLOSE' in data.keys():
             self.close = self.api.parse_tql_float(data['HST_CLOSE'], pid)
+        if 'VWAP' in data.keys():
+            self.vwap = self.api.parse_tql_float(data['VWAP'], pid)
 
         if self.api.enable_ticker:
             if quote_flag:
