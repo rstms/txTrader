@@ -190,15 +190,17 @@ class API_Symbol():
             trade_flag = True
         if 'BID' in data.keys():
             self.bid = self.api.parse_tql_float(data['BID'], pid)
-            quote_flag = True
-        if 'BIDSIZE' in data.keys():
-            self.bidsize = self.api.parse_tql_int(data['BIDSIZE'], pid)
+            if self.bid and 'BIDSIZE' in data.keys():
+                self.bidsize = self.api.parse_tql_int(data['BIDSIZE'], pid)
+            else:
+                self.bidsize = 0
             quote_flag = True
         if 'ASK' in data.keys():
             self.ask = self.api.parse_tql_float(data['ASK'], pid)
-            quote_flag = True
-        if 'ASKSIZE' in data.keys():
-            self.asksize = self.api.parse_tql_int(data['ASKSIZE'], pid)
+            if self.ask and 'ASKSIZE' in data.keys():
+              self.asksize = self.api.parse_tql_int(data['ASKSIZE'], pid)
+            else:
+                self.asksize = 0
             quote_flag = True
         if 'COMPANY_NAME' in data.keys():
             self.fullname = self.api.parse_tql_str(data['COMPANY_NAME'], pid)
@@ -992,7 +994,7 @@ class RTX():
 
     def parse_tql_float(self, data, pid):
         ret = self.parse_tql_field(data, pid)
-        return float(ret) if ret else 0.0
+        return round(float(ret),2) if ret else 0.0
 
     def parse_tql_int(self, data, pid):
         ret = self.parse_tql_field(data, pid)
