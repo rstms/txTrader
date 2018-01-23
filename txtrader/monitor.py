@@ -14,6 +14,7 @@
 
 import time
 from twisted.internet import reactor, protocol, task
+from twisted.protocols.basic import NetstringReceiver
 
 
 class Monitor():
@@ -30,8 +31,7 @@ class Monitor():
         self.user = user
         self.password = password
         self.channel = ''
-        self.callback_types = ['status', 'error', 'time',
-                               'order', 'execution', 'quote', 'trade', 'tick']
+        self.callback_types = ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick']
         self.flags = 'noquotes notrades'
 
         if callbacks:
@@ -76,7 +76,7 @@ class Monitor():
         reactor.run()
 
 
-class StatusClient(protocol.Protocol):
+class StatusClient(NetstringReceiver):
 
     def __init__(self):
         self.channel = ''
@@ -87,16 +87,11 @@ class StatusClient(protocol.Protocol):
     def connectionMade(self):
         pass
 
-    def dataReceived(self, data):
-        for line in data.strip().split('\n'):
-            self.processLine(line)
-
-    def processLine(self, data):
+    def stringReceived(self, data):
         if data.startswith('.'):
             self.factory.rx._callback('status', data)
             if data.startswith('.connected'):
-                self.transport.write('auth %s %s %s\n' % (
-                    self.factory.rx.user, self.factory.rx.password, self.factory.rx.flags))
+                self.sendString('auth %s %s %s' % (self.factory.rx.user, self.factory.rx.password, self.factory.rx.flags))
             elif data.startswith('.Authorized'):
                 dummy, self.channel = data.split()[:2]
                 # setup channel map now that we have the channel name
@@ -144,7 +139,7 @@ class StatusClientFactory(protocol.ClientFactory):
 
 if __name__ == '__main__':
 
-    _USER = 'change_this_username'
+    _USER = 'txtrader_user'
     _PASS = 'change_this_password'
     rx = Monitor(user=_USER, password=_PASS)
     rx.run()

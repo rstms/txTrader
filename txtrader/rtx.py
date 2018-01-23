@@ -42,7 +42,7 @@ POSITION_QUERY_TIMEOUT = 10
 from twisted.python import log
 from twisted.python.failure import Failure
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
-from twisted.protocols.basic import LineReceiver
+from twisted.protocols.basic import LineReceiver 
 from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
 from twisted.web import server
@@ -357,8 +357,8 @@ class API_Callback():
         """complete callback by calling callable function with value of results"""
         if not self.done:
             ret = self.format_results(results)
-            if self.callable.callback.__name__ == 'write':
-                ret = '%s.%s: %s\n' % (self.api.channel, self.label, ret)
+            if self.callable.callback.__name__ == 'sendString':
+                ret = '%s.%s: %s' % (self.api.channel, self.label, ret)
             #self.api.output('API_Callback.complete(%s)' % repr(ret))
             self.callable.callback(ret)
             self.callable = None
@@ -373,8 +373,8 @@ class API_Callback():
             if time.time() > self.expire:
                 msg = 'error: callback expired: %s' % repr((self.id, self.label))
                 self.api.WriteAllClients(msg)
-                if self.callable.callback.__name__ == 'write':
-                    self.callable.callback('%s.error: %s callback expired\n', (self.api.channel, self.label))
+                if self.callable.callback.__name__ == 'sendString':
+                    self.callable.callback('%s.error: %s callback expired', (self.api.channel, self.label))
                 else:
                     # special case for positions; timeout indicates empty positions 
                     if self.label == 'positions':
@@ -905,7 +905,8 @@ class RTX():
 
     def send_order_status(self, order):
         o = order.render()
-        self.WriteAllClients('order.%s: %s' % (order.fields['permid'], json.dumps(o)))
+        order_string = json.dumps(o)
+        self.WriteAllClients('order.%s: %s' % (order.fields['permid'], order_string))
 
     def make_account(self, row):
         return '%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'])
@@ -978,9 +979,9 @@ class RTX():
     def WriteAllClients(self, msg):
         if self.log_client_messages:
             self.output('WriteAllClients: %s.%s' % (self.channel, msg))
-        msg = str('%s.%s\n' % (self.channel, msg))
+        msg = str('%s.%s' % (self.channel, msg))
         for c in self.clients:
-            c.transport.write(msg)
+            c.sendString(msg)
 
     def error_handler(self, id, msg):
         """report error messages"""

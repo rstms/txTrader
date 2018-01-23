@@ -215,7 +215,7 @@ def test_query_accounts(api):
 
     # txtrader is expected to set the value _cash to the correct field 
     assert '_cash' in data.keys()
-    assert float(data['_cash']) == float(data[field])
+    assert float(data['_cash']) == round(float(data[field]),2)
     
     sdata = api.query_account(test_account, field) 
     assert sdata

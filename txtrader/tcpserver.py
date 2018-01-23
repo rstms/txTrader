@@ -21,9 +21,9 @@ from twisted.protocols import basic
 from socket import gethostname
 
 
-class tcpserver(basic.LineReceiver):
+class tcpserver(basic.NetstringReceiver):
     def __init__(self):
-        self.delimiter = '\n'
+        #self.delimiter = '\n'
         self.commands = {
             'auth': self.cmd_auth,
             'help': self.cmd_help,
@@ -50,7 +50,7 @@ class tcpserver(basic.LineReceiver):
         }
         self.authmap = set([])
 
-    def lineReceived(self, line):
+    def stringReceived(self, line):
         line = line.strip()
         self.factory.output('user command: %s' % '%s xxxxxxxxxxx' % ' '.join(
             line.split()[:2]) if line.startswith('auth') else line)
@@ -60,15 +60,12 @@ class tcpserver(basic.LineReceiver):
                 if cmd == 'auth' or self.check_authorized():
                     response = self.commands[cmd](line)
                     if response:
-                        self.send(response)
+                        self.sendString(response)
             else:
                 if self.check_authorized():
-                    self.send('.what?')
+                    self.sendString('.what?')
         else:
             self.check_authorized()
-
-    def send(self, msg):
-        self.transport.write('%s\n' % msg)
 
     def cmd_auth(self, line):
         auth, username, password = line.split()[:3]
@@ -81,7 +78,7 @@ class tcpserver(basic.LineReceiver):
 
     def check_authorized(self):
         if not self.transport.getPeer() in self.authmap:
-            self.transport.write('.Authorization required!\n')
+            self.sendString('.Authorization required!')
             self.factory.api.close_client(self)
             self.transport.loseConnection()
             return False
@@ -94,90 +91,81 @@ class tcpserver(basic.LineReceiver):
         reactor.callLater(1, reactor.stop)
 
     def cmd_help(self, line):
-        self.transport.write('.commands: %s\n' % repr(self.commands.keys()))
+        self.sendString('.commands: %s' % repr(self.commands.keys()))
 
     def cmd_disconnect(self, line):
         self.authmap.discard(self.transport.getPeer())
         self.transport.loseConnection()
 
     def cmd_status(self, line):
-        self.transport.write('.status: %s\n' %
-                             self.factory.api.query_connection_status())
+        self.sendString('.status: %s' % self.factory.api.query_connection_status())
 
     def cmd_setaccount(self, line):
         setaccount, account = line.split()[:2]
-        self.factory.api.set_account(account, self.transport.write)
+        self.factory.api.set_account(account, self.sendString)
 
     def cmd_accounts(self, line):
-        self.transport.write('.accounts: %s\n' % self.factory.api.accounts)
+        self.sendString('.accounts: %s' % self.factory.api.accounts)
 
     def cmd_getbars(self, line):
-        bars, symbol, period, start_date, start_time, end_date, end_time = line.split()[
-            :7]
-        self.factory.api.query_bars(symbol, period, ' '.join(
-            (start_date, start_time)), ' '.join((end_date, end_time)), self.transport.write)
-        []
+        bars, symbol, period, start_date, start_time, end_date, end_time = line.split()[:7]
+        self.factory.api.query_bars(symbol, period, ' '.join((start_date, start_time)), ' '.join((end_date, end_time)), self.sendString)
 
     def cmd_add(self, line):
         add, symbol = line.split()[:2]
         self.factory.api.symbol_enable(symbol, self)
-        self.transport.write('.symbol %s added\n' % symbol)
+        self.sendString('.symbol %s added' % symbol)
 
     def cmd_del(self, line):
         add, symbol = line.split()[:2]
         self.factory.api.symbol_disable(symbol, self)
-        self.transport.write('.symbol %s deleted\n' % symbol)
+        self.sendString('.symbol %s deleted' % symbol)
 
     def cmd_market_order(self, line):
         order, symbol, qstr = line.split()[:3]
-        self.factory.api.market_order(symbol, int(qstr), self.transport.write)
+        self.factory.api.market_order(symbol, int(qstr), self.sendString)
 
     def cmd_stop_order(self, line):
         order, symbol, price, qstr = line.split()[:4]
-        self.factory.api.stop_order(symbol, float(
-            price), int(qstr), self.transport.write)
+        self.factory.api.stop_order(symbol, float(price), int(qstr), self.sendString)
 
     def cmd_limit_order(self, line):
         order, symbol, price, qstr = line.split()[:4]
-        self.factory.api.limit_order(symbol, float(
-            price), int(qstr), self.transport.write)
+        self.factory.api.limit_order(symbol, float(price), int(qstr), self.sendString)
 
     def cmd_stoplimit_order(self, line):
-        order, symbol, stop_price, limit_price, qstr = line.split()[:5]
-        self.factory.api.stoplimit_order(symbol, float(stop_price), float(
-            limit_price), int(qstr), self.transport.write)
+        order, symbol, stop_price, limit_price, qstr = line.split()[:5] 
+        self.factory.api.stoplimit_order(symbol, float(stop_price), float( limit_price), int(qstr), self.sendString)
 
     def cmd_cancel(self, line):
         cancel, id = line.split()[:2]
-        self.factory.api.cancel_order(id, self.transport.write)
+        self.factory.api.cancel_order(id, self.sendString)
 
     def cmd_symbols(self, line):
         symbols = self.factory.api.symbols
-        self.transport.write('.symbols: %s\n' % repr(symbols))
+        self.sendString('.symbols: %s' % repr(symbols))
 
     def cmd_positions(self, line):
-        self.factory.api.request_positions(self.transport.write)
+        self.factory.api.request_positions(self.sendString)
 
     def cmd_orders(self, line):
-        self.factory.api.request_orders(self.transport.write)
+        self.factory.api.request_orders(self.sendString)
 
     def cmd_executions(self, line):
-        self.factory.api.request_executions(self.transport.write)
+        self.factory.api.request_executions(self.sendString)
 
     def cmd_globalcancel(self, line):
         self.factory.api.request_global_cancel()
-        self.transport.write('.global order cancel requested\n')
+        self.sendString('.global order cancel requested')
 
     def connectionMade(self):
         self.factory.output('client connection from %s' %
                             self.transport.getPeer())
         self.authmap.discard(self.transport.getPeer())
-        self.transport.write('.connected: %s %s %s %s on %s\n' % (
-            self.factory.api.label, str(VERSION), str(DATE), str(LABEL), str(gethostname())))
+        self.sendString('.connected: %s %s %s %s on %s' % (self.factory.api.label, str(VERSION), str(DATE), str(LABEL), str(gethostname())))
 
     def connectionLost(self, reason):
-        self.factory.output('client connection from %s lost: %s' %
-                            (self.transport.getPeer(), repr(reason)))
+        self.factory.output('client connection from %s lost: %s' % (self.transport.getPeer(), repr(reason)))
         self.authmap.discard(self.transport.getPeer())
         self.factory.api.close_client(self)
 

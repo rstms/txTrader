@@ -14,11 +14,11 @@
 LINE_BUFFER_SIZE = 1048576
 
 from twisted.internet import protocol
-from twisted.protocols.basic import LineReceiver
+from twisted.protocols.basic import NetstringReceiver
 
 
-class CLI(LineReceiver):
-    delimiter = '\n'
+class CLI(NetstringReceiver):
+    #delimiter = '\n'
     MAX_LENGTH = LINE_BUFFER_SIZE
 
     def __init__(self, connect_function, label):
@@ -37,7 +37,7 @@ class CLI(LineReceiver):
             self.factory.resetDelay()
         self.cli_receive = self.cli_connect(self)
 
-    def lineReceived(self, line):
+    def stringReceived(self, line):
         print("+++ lineReceived(%s): %s" % (self.label, repr(line)))
         if not self.cli_receive(line):
             self.transport.loseConnection()
