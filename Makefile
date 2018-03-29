@@ -26,6 +26,7 @@ clean:
 	@echo "Cleaning up..."
 	rm -f txtrader/*.pyc
 	rm -rf build
+	rm -rf dist 
 	rm -rf $(VENV)
 	rm -f .make-*
 
@@ -42,15 +43,14 @@ config: .make-config
 .make-config:
 	@echo "Configuring..."
 	@getent >/dev/null passwd txtrader && echo "User txtrader exists." || adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader
-	@echo $(VENV)>etc/txtrader/TXTRADER_VENV
-	@echo txtrader>etc/txtrader/TXTRADER_DAEMON_USER
 	@for package in $(REQUIRED_PACKAGES); do \
 	  dpkg-query >/dev/null -l $$package && echo "verified package $$package" || break;\
 	done;
-	mkdir -p /etc/txtrader
+	mkdir -p $(ENVDIR)
 	chmod 770 $(ENVDIR)
-	cp -r etc/txtrader/* $(ENVDIR)
 	chown -R txtrader.txtrader $(ENVDIR)
+	cp -r etc/txtrader/* $(ENVDIR)
+	echo $(VENV)>etc/txtrader/TXTRADER_VENV
 	chmod 640 $(ENVDIR)/*
 	touch .make-config
 

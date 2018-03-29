@@ -6,6 +6,7 @@ test/testserver.py
 txtrader/__init__.py
 txtrader/__main__.py
 txtrader/client.py
+txtrader/client_test.py
 txtrader/config.py
 txtrader/conftest.py
 txtrader/monitor.py
