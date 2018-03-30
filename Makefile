@@ -84,6 +84,7 @@ venv:	.make-venv
 	for package in $(REQUIRED_PIP); do \
           echo -n "Installing package $$package into virtual env..."; $(PIP) install $$package || false;\
         done;
+	echo $(VENV) >$(ENVDIR)/TXTRADER_VENV
 	touch .make-venv
 
 install: .make-venv config
