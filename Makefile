@@ -46,10 +46,10 @@ config: .make-config
 	@for package in $(REQUIRED_PACKAGES); do \
 	  dpkg-query >/dev/null -l $$package && echo "verified package $$package" || break;\
 	done;
+	echo $(VENV)>etc/txtrader/TXTRADER_VENV
 	mkdir -p $(ENVDIR)
 	chmod 770 $(ENVDIR)
 	cp -r etc/txtrader/* $(ENVDIR)
-	echo $(VENV)>etc/txtrader/TXTRADER_VENV
 	chown -R txtrader.txtrader $(ENVDIR)
 	chmod 640 $(ENVDIR)/*
 	touch .make-config
