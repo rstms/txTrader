@@ -16,8 +16,8 @@ MODE=rtx
 
 # set account to AUTO for make testconfig to auto-set demo account
 TEST_HOST = 127.0.0.1
-TEST_PORT = 7497 
-TEST_ACCOUNT = AUTO
+TEST_PORT = 51070 
+TEST_ACCOUNT = $$(cat etc/txtrader/TXTRADER_API_ACCOUNT)
 
 default:
 	@echo "\nQuick Start Commands:\n\nsudo make clean && sudo make config && make build && make venv && sudo make install && make run\n"
@@ -56,12 +56,12 @@ config: .make-config
 
 testconfig:
 	@echo "Configuring test API..."
-	$(MAKE) start
-	sudo sh -c "echo $(TEST_PORT)>$(ENVDIR)/TXTRADER_API_PORT"
-	sudo sh -c "echo $(TEST_ACCOUNT)>$(ENVDIR)/TXTRADER_API_ACCOUNT"
+	#$(MAKE) start
+	#sudo sh -c "echo $(TEST_PORT)>$(ENVDIR)/TXTRADER_API_PORT"
+	#sudo sh -c "echo $(TEST_ACCOUNT)>$(ENVDIR)/TXTRADER_API_ACCOUNT"
 	@echo -n "Restarting service..."
-	@sudo svc -t /etc/service/txtrader
-	@while [ "$$(txtrader 2>/dev/null $(MODE) status)" != "Connected" ]; do echo -n .;sleep 1; done;
+	$(MAKE) restart
+	@while [ "$$(txtrader 2>/dev/null $(MODE) status)" != '"Up"' ]; do echo -n '.'; sleep 1; done;
 	@txtrader $(MODE) status
 	@if [ "$(TEST_ACCOUNT)" = "AUTO" ]; then\
           echo -n "Getting account...";\
@@ -70,9 +70,9 @@ testconfig:
 	  export ACCOUNT="`txtrader $(MODE) query_accounts | tr -d \"[]\'\" | cut -d, -f1`";\
 	else\
 	  export ACCOUNT="$(TEST_ACCOUNT)";\
-	fi;\
-	echo "Setting test ACCOUNT=$$ACCOUNT";\
-	sudo sh -c "echo $$ACCOUNT>$(ENVDIR)/TXTRADER_API_ACCOUNT";\
+	  echo "Setting test ACCOUNT=$$ACCOUNT";\
+	  sudo sh -c "echo $$ACCOUNT>$(ENVDIR)/TXTRADER_API_ACCOUNT";\
+	fi;
 
 venv:	.make-venv
 
@@ -102,11 +102,18 @@ start:
 	@echo "Starting Service..."
 	sudo rm -f /etc/service/txtrader/down
 	sudo svc -u /etc/service/txtrader
+	@while ! (ps fax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
+	@echo -n "Waiting for status 'Up'..."
+	@while [ "$$(txtrader 2>/dev/null $(MODE) status)" != '"Up"' ]; do echo -n '.'; sleep 1; done;
+	@echo "OK"
 
 stop:
 	@echo "Stopping Service..."
 	sudo touch /etc/service/txtrader/down
 	sudo svc -d /etc/service/txtrader
+	@echo -n "Waiting for process termination..."
+	@while (ps fax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
+	@echo "OK"
 
 restart: stop start
 	@echo "Restarting Service..."

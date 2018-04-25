@@ -18,18 +18,23 @@ from txtrader.client import API
 import simplejson as json
 from pprint import pprint
 import pytest
+import subprocess
 
 test_mode = 'RTX'
 test_account = 'DEMO1.TEST.DEMO.2'
+
+QUERY_POSITION_ITERS=10
 
 from server_test import Server
 
 @pytest.fixture(scope='module')
 def api():
+    subprocess.check_call('cd ..;make start', shell=True)
     api = API(test_mode)
     assert api
     print('\ntxtrader client connected: %s' % api)
     yield api
+    subprocess.check_call('cd ..;make stop', shell=True)
 
 def dump(label, o):
     print('%s:\n%s' % (label, json.dumps(o, indent=2, separators=(',', ':'))))
@@ -44,7 +49,7 @@ def test_version(api):
 
 
 def test_query_positions(api):
-    for i in range(1000):
+    for i in range(QUERY_POSITION_ITERS):
       p = api.query_positions()
       assert p
       assert type(p)==dict

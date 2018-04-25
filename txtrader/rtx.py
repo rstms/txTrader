@@ -281,6 +281,8 @@ class API_Order():
     def render(self):
         # customize fields for standard txTrader order status 
         self.fields['permid']=self.fields['ORIGINAL_ORDER_ID']
+        self.fields['symbol']=self.fields['DISP_NAME']
+        self.fields['account']=self.api.make_account(self.fields)
         status = self.fields.setdefault('CURRENT_STATUS', 'UNDEFINED')
         otype = self.fields.setdefault('TYPE', 'Undefined')
         #print('render: permid=%s ORDER_ID=%s CURRENT_STATUS=%s TYPE=%s' % (self.fields['permid'], self.fields['ORDER_ID'], status, otype))
@@ -290,7 +292,9 @@ class API_Order():
             self.fields['status'] = 'Pending'
         elif status=='COMPLETED':
             if otype in ['UserSubmitOrder', 'UserSubmitStagedOrder', 'UserSubmitStatus', 'ExchangeReportStatus']:
-                if not self.is_filled():
+                if self.is_filled():
+                    self.fields['status'] = 'Filled'
+                else:
                     self.fields['status'] = 'Submitted'
             elif otype == 'UserSubmitCancel':
                 self.fields['status'] = 'Cancelled'
@@ -427,11 +431,12 @@ class API_Callback():
         for row in rows:
             if row:
                 self.api.handle_order_response(row)
-        results={}
-        for k,v in self.api.orders.items():
-            if not oid or oid==k: 
-              results[k]=v.fields
-              results[k]['updates']=v.updates
+        if oid:
+            results = self.api.orders[oid].render()
+        else:
+            results={}
+            for k,v in self.api.orders.items():
+                results[k] = v.render()
         return results
 
     def format_executions(self, rows):

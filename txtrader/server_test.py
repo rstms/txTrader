@@ -66,8 +66,8 @@ class Server():
         print('Terminated; exit=%d' % (self.process.returncode))
         self.logfile.close()
         self.restore_env()
-        print('Waiting 15 seconds to avoid sqlBlocked at Realtick...')
-        time.sleep(15)
+        #print('Waiting 15 seconds to avoid sqlBlocked at Realtick...')
+        #time.sleep(15)
 
     def __enter__(self):
         return self

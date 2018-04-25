@@ -16,7 +16,7 @@ import signal
 import time
 
 import simplejson as json
-import pprint
+from pprint import pprint
 import pytest
 
 testmode = 'RTX'
@@ -140,11 +140,12 @@ def test_partial_fill(api):
     print('oid=%s' % oid)
     while o['status'] != 'Filled':
          o = api.query_order(oid)
+         #pprint(o)
          status = o['status']
          filled = o['filled'] if 'filled' in o.keys() else None 
          remaining = o['remaining'] if 'remaining' in o.keys() else None 
          average_price = o['avgfillprice'] if 'avgfillprice' in o.keys() else None
-         print('status=%s filled=%s remaining=%s average_price=%s' % (status, filled, remaining, average_price))
+         print('status=%s filled=%s remaining=%s average_price=%s type=%s' % (status, filled, remaining, average_price, o['TYPE']))
          assert not (status=='Filled' and filled < quantity)
     o = api.market_order(symbol, quantity*-1)
 
