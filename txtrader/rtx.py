@@ -33,10 +33,10 @@ RTX_STYPE=1
 
 ENABLE_CXN_DEBUG = False
 
-DISCONNECT_SECONDS = 15
+DISCONNECT_SECONDS = 30 
 SHUTDOWN_ON_DISCONNECT = True 
 ADD_SYMBOL_TIMEOUT = 5
-ACCOUNT_QUERY_TIMEOUT = 15
+ACCOUNT_QUERY_TIMEOUT = 10
 POSITION_QUERY_TIMEOUT = 10
 
 from twisted.python import log
@@ -1288,7 +1288,7 @@ class RTX():
 
     def request_account_data(self, account, fields, callback):
         cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
-        cb = API_Callback(self, 0, 'account_data', callback)
+        cb = API_Callback(self, 0, 'account_data', callback, ACCOUNT_QUERY_TIMEOUT)
         bank, branch, customer, deposit = account.split('.')[:4]
         tql_where = "BANK='%s',BRANCH='%s',CUSTOMER='%s',DEPOSIT='%s'" % (bank,branch,customer,deposit)
         if fields:
