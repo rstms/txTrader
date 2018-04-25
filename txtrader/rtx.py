@@ -172,7 +172,9 @@ class API_Symbol():
                 self.rawdata[k]=''
         if self.api.symbol_init(self):
             self.cxn = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
-            fields = 'TRDPRC_1,TRDVOL_1,BID,BIDSIZE,ASK,ASKSIZE,ACVOL_1'
+            fields = 'TRDPRC_1,TRDVOL_1,ACVOL_1'
+            if self.api.enable_ticker:
+                fields += ',BID,BIDSIZE,ASK,ASKSIZE'
             self.cxn.advise('LIVEQUOTE', fields, "DISP_NAME='%s'" % self.symbol, self.parse_fields)
 
     def parse_fields(self, cxn, data):
