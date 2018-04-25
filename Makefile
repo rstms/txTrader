@@ -84,7 +84,6 @@ venv:	.make-venv
 	for package in $(REQUIRED_PIP); do \
           echo -n "Installing package $$package into virtual env..."; $(PIP) install $$package || false;\
         done;
-	echo $(VENV) >$(ENVDIR)/TXTRADER_VENV
 	touch .make-venv
 
 install: .make-venv config
@@ -135,4 +134,7 @@ test: $(TESTS)
 
 run: 
 	@echo Running...
-	. $(VENV)/bin/activate && envdir etc/txtrader twistd --reactor=poll --nodaemon --logfile=- --pidfile= --python=service/txtrader/txtrader.tac
+	. $(VENV)/bin/activate && envdir etc/txtrader twistd --reactor=poll --nodaemon --logfile=- --pidfile= --python=service/txtrader/txtrader.tac | tee /tmp/runlog
+
+logorders:
+	grep WriteAllClients /tmp/runlog | egrep 'rtx.order' | cut -d'{' -f 2- | xargs -n 1 -d'\n' -iLINE echo "{LINE" | jq .

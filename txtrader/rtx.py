@@ -37,7 +37,7 @@ DISCONNECT_SECONDS = 15
 SHUTDOWN_ON_DISCONNECT = True 
 ADD_SYMBOL_TIMEOUT = 5
 ACCOUNT_QUERY_TIMEOUT = 15
-POSITION_QUERY_TIMEOUT = 10 
+POSITION_QUERY_TIMEOUT = 10
 
 from twisted.python import log
 from twisted.python.failure import Failure
@@ -393,6 +393,8 @@ class API_Callback():
             results = self.format_orders(results)
         elif self.label=='executions':
             results = self.format_executions(results)
+        elif self.label == 'order_status':
+            results = self.format_orders(results, self.id)
 
         return json.dumps(results)
 
@@ -419,14 +421,15 @@ class API_Callback():
                         positions[account][symbol] += m * int(pos[f])
         return positions
 
-    def format_orders(self, rows):
+    def format_orders(self, rows, oid=None):
         for row in rows:
             if row:
                 self.api.handle_order_response(row)
         results={}
         for k,v in self.api.orders.items():
-            results[k]=v.fields
-            results[k]['updates']=v.updates
+            if not oid or oid==k: 
+              results[k]=v.fields
+              results[k]['updates']=v.updates
         return results
 
     def format_executions(self, rows):
@@ -685,9 +688,10 @@ class RTX():
         self.position_callbacks = []
         self.executions = {}
         self.execution_callbacks = []
+        self.order_callbacks = []
         self.bardata_callbacks = []
         self.cancel_callbacks = []
-        self.order_callbacks = []
+        self.order_status_callbacks = []
         self.ticket_callbacks = []
         self.add_symbol_callbacks = []
         self.accountdata_callbacks = []
@@ -849,7 +853,7 @@ class RTX():
 
     def CheckPendingResults(self):
         # check each callback list for timeouts
-        for cblist in [self.timer_callbacks, self.position_callbacks, self.ticket_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.add_symbol_callbacks, self.accountdata_callbacks, self.set_account_callbacks, self.account_request_callbacks]:
+        for cblist in [self.timer_callbacks, self.position_callbacks, self.ticket_callbacks, self.openorder_callbacks, self.execution_callbacks, self.bardata_callbacks, self.order_callbacks, self.cancel_callbacks, self.add_symbol_callbacks, self.accountdata_callbacks, self.set_account_callbacks, self.account_request_callbacks, self.order_status_callbacks]:
             dlist = []
             for cb in cblist:
                 cb.check_expire()
@@ -1271,11 +1275,9 @@ class RTX():
         self.openorder_callbacks.append(cb)
 
     def request_order(self, oid, callback):
-        if oid in self.orders:
-            ret = self.orders[oid].render()
-        else:
-            ret = {oid: {'status:': 'Undefined'}}
-        API_Callback(self, 0, 'order_request', callback).complete(ret)
+        cb = API_Callback(self, oid, 'order_status', callback)
+        self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').request('ORDERS', '*', "ORIGINAL_ORDER_ID='%s'" % oid, cb)
+        self.order_status_callbacks.append(cb)
 
     def request_executions(self, callback):
         cb = API_Callback(self, 0, 'executions', callback)

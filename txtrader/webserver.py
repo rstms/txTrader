@@ -334,7 +334,7 @@ class Leaf(Resource):
     def render_POST(self, request):
         # pprint(request.__dict__)
         data = json.loads(request.content.getvalue())
-        self.root.output('%s:%d POST %s %s' % (
+        self.root.output('RX Request %s:%d POST %s %s' % (
             request.client.host, request.client.port, request.path, repr(data)))
         request.setHeader('Connection', 'close')
         request.setHeader('Content-type', 'application/json')
