@@ -29,12 +29,12 @@ from server_test import Server
 
 @pytest.fixture(scope='module')
 def api():
-    subprocess.check_call('cd ..;make start', shell=True)
+    subprocess.check_call('cd ..;make start_wait', shell=True)
     api = API(test_mode)
     assert api
     print('\ntxtrader client connected: %s' % api)
     yield api
-    subprocess.check_call('cd ..;make stop', shell=True)
+    subprocess.check_call('cd ..;make stop_wait', shell=True)
 
 def dump(label, o):
     print('%s:\n%s' % (label, json.dumps(o, indent=2, separators=(',', ':'))))

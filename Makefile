@@ -28,6 +28,7 @@ clean:
 	rm -rf build
 	rm -rf dist 
 	rm -rf $(VENV)
+	rm -f etc/txtrader/TXTRADER_VENV
 	rm -f .make-*
 
 build:  .make-build
@@ -103,6 +104,8 @@ start:
 	sudo rm -f /etc/service/txtrader/down
 	sudo svc -u /etc/service/txtrader
 	@while ! (ps fax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
+
+start_wait: start
 	@echo -n "Waiting for status 'Up'..."
 	@while [ "$$(txtrader 2>/dev/null $(MODE) status)" != '"Up"' ]; do echo -n '.'; sleep 1; done;
 	@echo "OK"
@@ -111,6 +114,8 @@ stop:
 	@echo "Stopping Service..."
 	sudo touch /etc/service/txtrader/down
 	sudo svc -d /etc/service/txtrader
+
+stop_wait: stop
 	@echo -n "Waiting for process termination..."
 	@while (ps fax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
 	@echo "OK"
