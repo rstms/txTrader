@@ -103,7 +103,7 @@ start:
 	@echo "Starting Service..."
 	sudo rm -f /etc/service/txtrader/down
 	sudo svc -u /etc/service/txtrader
-	@while ! (ps fax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
+	@while [ "$$(sudo svstat /etc/service/txtrader| awk '{print $$2}')" != 'up' ]; do echo -n '.'; sleep 1; done
 
 start_wait: start
 	@echo -n "Waiting for status 'Up'..."
@@ -114,6 +114,7 @@ stop:
 	@echo "Stopping Service..."
 	sudo touch /etc/service/txtrader/down
 	sudo svc -d /etc/service/txtrader
+	@while [ "$$(sudo svstat /etc/service/txtrader| awk '{print $$2}')" != 'down' ]; do echo -n '.'; sleep 1; done
 
 stop_wait: stop
 	@echo -n "Waiting for process termination..."

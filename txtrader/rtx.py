@@ -20,6 +20,7 @@ from hexdump import hexdump
 import pytz
 import tzlocal
 import datetime
+from pprint import pprint
 
 from txtrader.config import Config
 
@@ -286,6 +287,7 @@ class API_Order():
         status = self.fields.setdefault('CURRENT_STATUS', 'UNDEFINED')
         otype = self.fields.setdefault('TYPE', 'Undefined')
         #print('render: permid=%s ORDER_ID=%s CURRENT_STATUS=%s TYPE=%s' % (self.fields['permid'], self.fields['ORDER_ID'], status, otype))
+        #pprint(self.fields)
         if status=='PENDING': 
             self.fields['status'] = 'Submitted'
         elif status=='LIVE':
