@@ -58,3 +58,4 @@ service/down
 service/txtrader.pid
 .make-*
 runlog
+.pytest_cache/

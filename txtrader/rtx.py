@@ -275,7 +275,6 @@ class API_Order():
                 if order_id != self.oid:
                     self.updates[order_id] = changes
 
-
         if json.dumps(self.fields) != field_state:
             self.api.send_order_status(self)
 
@@ -903,8 +902,8 @@ class RTX():
                 self.orders[oid]=o
                 o.update(msg)
         else:
-            #self.error_handler(self.id, 'handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
-            self.output('UNKNOWN_ORDER: handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
+            self.error_handler(self.id, 'handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
+            #self.output('error: handle_order_update: ORIGINAL_ORDER_ID not found in %s' % repr(msg))
 
     def handle_ticket_update(self, cxn, msg):
         return self.handle_ticket_response(msg)
@@ -917,9 +916,8 @@ class RTX():
             del self.pending_tickets[tid]
 
     def send_order_status(self, order):
-        o = order.render()
-        order_string = json.dumps(o)
-        self.WriteAllClients('order.%s: %s' % (order.fields['permid'], order_string))
+        fields = order.render()
+        self.WriteAllClients('order.%s %s %s' % (fields['permid'], fields['account'], fields['status']))
 
     def make_account(self, row):
         return '%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'])

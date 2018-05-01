@@ -22,7 +22,7 @@ class Monitor():
         """Initialize Monitor:
           connection parameters: host, port, user, password, 
           callbacks: {'name':function ...}  
-            where name is one of ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick']
+            where name is one of ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick', 'shutdown']
             and function(data) is the callback that will receive event data
             callbacks must return True to continue monitor.run() loop
         """
@@ -31,8 +31,9 @@ class Monitor():
         self.user = user
         self.password = password
         self.channel = ''
-        self.callback_types = ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick']
+        self.callback_types = ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick', 'shutdown']
         self.flags = 'noquotes notrades'
+        self.connection = None
 
         if callbacks:
             self.callbacks = callbacks
@@ -41,9 +42,15 @@ class Monitor():
             for cb_type in self.callback_types:
                 self.set_callback(cb_type, self._cb_print)
 
+    	reactor.addSystemEventTrigger('before','shutdown', self.shutdown_event)
+
+    def shutdown_event(self):
+        self._callback('shutdown', 'reactor shutdown detected')
+        self.connection.disconnect()
+
     def listen(self, _reactor):
         f = StatusClientFactory(self)
-        reactor.connectTCP(self.host, self.port, f)
+        self.connection = reactor.connectTCP(self.host, self.port, f)
 
     def set_callback(self, cb_type, cb_func):
         """Set a callback function for a message type."""
@@ -127,12 +134,12 @@ class StatusClientFactory(protocol.ClientFactory):
         self.rx = receiver
 
     def clientConnectionFailed(self, connector, reason):
-        self.rx._callback('error', 'connection failed')
+        self.rx._callback('error', 'connection %s failed, reason=%s' % (connector, reason))
         if reactor.running:
             reactor.stop()
 
     def clientConnectionLost(self, connector, reason):
-        self.rx._callback('error', 'connection lost')
+        self.rx._callback('error', 'connection %s lost, reason=%s' % (connector, reason))
         if reactor.running:
             reactor.stop()
 
