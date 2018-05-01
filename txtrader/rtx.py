@@ -228,7 +228,7 @@ class API_Order():
         self.oid = oid
         self.fields = data
         self.callback = callback
-        self.updates = {}
+        self.updates = []
         self.suborders = {}
 
     def initial_update(self, data):
@@ -273,7 +273,8 @@ class API_Order():
                 if self.api.log_order_updates:
                     self.api.output('ORDER_CHANGES: OID=%s ORDER_ID=%s %s' % (self.oid, order_id, repr(changes)))
                 if order_id != self.oid:
-                    self.updates[order_id] = changes
+                    update_type = changes['TYPE'] if 'TYPE' in changes else 'Undefined'
+                    self.updates.append({'id': order_id, 'type':  update_type, 'fields': changes, 'time': time.time() })
 
         if json.dumps(self.fields) != field_state:
             self.api.send_order_status(self)
@@ -292,11 +293,14 @@ class API_Order():
         elif status=='LIVE':
             self.fields['status'] = 'Pending'
         elif status=='COMPLETED':
-            if otype in ['UserSubmitOrder', 'UserSubmitStagedOrder', 'UserSubmitStatus', 'ExchangeReportStatus']:
-                if self.is_filled():
-                    self.fields['status'] = 'Filled'
-                else:
-                    self.fields['status'] = 'Submitted'
+            if self.is_filled():
+                self.fields['status'] = 'Filled'
+                if otype == 'ExchangeTradeOrder':
+                    self.fields['filled'] =self.fields['VOLUME_TRADED']
+                    self.fields['remaining']=0
+                    self.fields['avgfillprice']=self.fields['AVG_PRICE']
+            elif otype in ['UserSubmitOrder', 'UserSubmitStagedOrder', 'UserSubmitStatus', 'ExchangeReportStatus']:
+                self.fields['status'] = 'Submitted'
             elif otype == 'UserSubmitCancel':
                 self.fields['status'] = 'Cancelled'
             elif otype == 'UserSubmitChange':
@@ -305,12 +309,6 @@ class API_Order():
                 self.fields['status'] = 'Accepted'
             elif otype in ['ClerkReject', 'ExchangeKillOrder']:
                 self.fields['status'] = 'Error'
-            elif otype == 'ExchangeTradeOrder':
-                if self.is_filled():
-                    self.fields['status']='Filled'
-                    self.fields['filled'] =self.fields['VOLUME_TRADED']
-                    self.fields['remaining']=0
-                    self.fields['avgfillprice']=self.fields['AVG_PRICE']
             else:
                 self.api.error_handler(self.oid, 'Unknown TYPE: %s' % otype)
                 self.fields['status'] = 'Error'
@@ -341,8 +339,8 @@ class API_Order():
     def has_fill_type(self):
         if self.fields['TYPE']=='ExchangeTradeOrder':
             return True
-        for fields in self.updates.values():
-            if 'TYPE' in fields and fields['TYPE']=='ExchangeTradeOrder':
+        for update_type in [update['type'] for update in self.updates]:
+            if update_type =='ExchangeTradeOrder':
                 return True
         return False
 
