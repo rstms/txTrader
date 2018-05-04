@@ -915,7 +915,7 @@ class RTX():
 
     def send_order_status(self, order):
         fields = order.render()
-        self.WriteAllClients('order.%s %s %s' % (fields['permid'], fields['account'], fields['status']))
+        self.WriteAllClients('order.%s %s %s %s' % (fields['permid'], fields['account'], fields['TYPE'], fields['status']))
 
     def make_account(self, row):
         return '%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'])
