@@ -220,7 +220,11 @@ if __name__=='__main__':
         del(argv[1])
     server, command = argv[1:3]
     args = argv[3:]
-    ret = API(server).cmd(command, args)
+    try:
+      ret = API(server).cmd(command, args)
+    except Exception as ex:
+      sys.stderr.write('%s\n' % repr(ex))
+      exit(2)
     if ret != None:
         if '-p' in flags:
             print(json.dumps(ret, sort_keys=True, indent=2, separators=(',', ': ')))

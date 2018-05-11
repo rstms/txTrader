@@ -3,7 +3,8 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp python python-dev
-REQUIRED_PIP = pytest Twisted hexdump ujson simplejson requests pytz tzlocal ../IbPy/dist/*.tar.gz ./dist/*.tar.gz
+REQUIRED_PIP = pytest Twisted hexdump ujson simplejson requests pytz tzlocal ../IbPy/dist/*.tar.gz
+PROJECT_PIP = ./dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
 ENVDIR = /etc/txtrader
@@ -20,7 +21,7 @@ TEST_PORT = 51070
 TEST_ACCOUNT = $$(cat etc/txtrader/TXTRADER_API_ACCOUNT)
 
 default:
-	@echo "\nQuick Start Commands:\n\nsudo make clean && sudo make config && make build && make venv && sudo make install && make run\n"
+	@echo "\nQuick Start Commands:\n\nsudo make clean && sudo make config && make build && make venv && make install && make run\n"
 
 clean:
 	@echo "Cleaning up..."
@@ -83,21 +84,22 @@ venv:	.make-venv
 	virtualenv -p $(PYTHON) $(VENV)
 	. $(VENV)/bin/activate; \
 	for package in $(REQUIRED_PIP); do \
-          echo -n "Installing package $$package into virtual env..."; $(PIP) install $$package || false;\
+          echo -n "Installing package $$package into virtual env..."; $(PIP) install --upgrade $$package || false;\
         done;
 	touch .make-venv
 
-install: .make-venv config
+install: build .make-venv config
 	@echo "Installing txtrader..."
-	cp bin/txtrader /usr/local/bin/txtrader
-	mkdir -p /var/svc.d
-	rm -rf /var/svc.d/txtrader
-	cp -rp service/txtrader /var/svc.d
-	touch /var/svc.d/txtrader/down
-	chown -R root.root /var/svc.d/txtrader
-	chown root.txtrader /var/svc.d/txtrader
-	chown root.txtrader /var/svc.d/txtrader/*.tac
-	update-service --add /var/svc.d/txtrader
+	. $(VENV)/bin/activate; $(PIP) install --upgrade $(PROJECT_PIP) || false
+	sudo cp bin/txtrader /usr/local/bin/txtrader
+	sudo mkdir -p /var/svc.d
+	sudo rm -rf /var/svc.d/txtrader
+	sudo cp -rp service/txtrader /var/svc.d
+	sudo touch /var/svc.d/txtrader/down
+	sudo chown -R root.root /var/svc.d/txtrader
+	sudo chown root.txtrader /var/svc.d/txtrader
+	sudo chown root.txtrader /var/svc.d/txtrader/*.tac
+	sudo update-service --add /var/svc.d/txtrader
 
 start:
 	@echo "Starting Service..."
@@ -113,12 +115,13 @@ start_wait: start
 stop:
 	@echo "Stopping Service..."
 	sudo touch /etc/service/txtrader/down
+	@ps ax | egrep [t]xtrader.tac && txtrader rtx shutdown || echo not running
 	sudo svc -d /etc/service/txtrader
 	@while [ "$$(sudo svstat /etc/service/txtrader| awk '{print $$2}')" != 'down' ]; do echo -n '.'; sleep 1; done
 
 stop_wait: stop
 	@echo -n "Waiting for process termination..."
-	@while (ps fax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
+	@while (ps ax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
 	@echo "OK"
 
 restart: stop start

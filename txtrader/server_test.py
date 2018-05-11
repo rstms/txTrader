@@ -40,6 +40,11 @@ class Server():
             'netstat -ant | egrep LISTEN | egrep 50090>/dev/null', shell=True)
         assert not subprocess.call(
             'netstat -ant | egrep LISTEN | egrep 50070>/dev/null', shell=True)
+
+        print('Waiting for txtrader status "Up"...')
+        while subprocess.call("[ \"$(txtrader rtx status)\" = '\"Up\"' ]", shell=True):
+            time.sleep(1)
+
         print('Test server ready.')
 
     def set_env(self, key, value):
@@ -54,7 +59,10 @@ class Server():
     def init(self):
         self.api = API(self.mode)
         assert self.api
-        self.api.set_account(self.api.account)
+        account = self.api.account
+        assert account
+        print('setting account %s' % account) 
+        self.api.set_account(account)
         return self.api
 
     def __del__(self):

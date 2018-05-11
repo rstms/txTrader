@@ -24,7 +24,7 @@ from pprint import pprint
 
 from txtrader.config import Config
 
-DEFAULT_CALLBACK_TIMEOUT = 5
+TIMEOUT_TYPES = ['DEFAULT', 'ACCOUNT', 'ADDSYMBOL', 'ORDER', 'ORDERSTATUS', 'POSITION', 'TIMER']
 
 # default RealTick orders to NYSE and Stock type
 RTX_EXCHANGE='NYS'
@@ -36,9 +36,6 @@ ENABLE_CXN_DEBUG = False
 
 DISCONNECT_SECONDS = 30 
 SHUTDOWN_ON_DISCONNECT = True 
-ADD_SYMBOL_TIMEOUT = 5
-ACCOUNT_QUERY_TIMEOUT = 10
-POSITION_QUERY_TIMEOUT = 10
 
 from twisted.python import log
 from twisted.python.failure import Failure
@@ -114,7 +111,7 @@ class API_Symbol():
                     (self, symbol, client_id))
         self.output('Adding %s to watchlist' % self.symbol)
         self.cxn = api.cxn_get('TA_SRV', 'LIVEQUOTE')
-        cb = API_Callback(self.api, self.cxn.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), ADD_SYMBOL_TIMEOUT)
+        cb = API_Callback(self.api, self.cxn.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), self.api.callback_timeout['ADDSYMBOL'])
         self.cxn.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
 
     def __str__(self):
@@ -351,9 +348,9 @@ class API_Callback():
         self.api = api
         self.id = id
         self.label = label
-        if not timeout:
-            timeout = api.callback_timeout
-        self.expire = time.time() + timeout
+        self.started = time.time()
+        self.timeout = timeout or api.callback_timeout['DEFAULT']
+        self.expire = self.started + timeout
         self.callable = callable
         self.done = False
         self.data = None
@@ -370,22 +367,19 @@ class API_Callback():
             self.done = True
 
         else:
-            self.api.error_handler(self.id, 'callback: %s was already done! results=%s' % (self, results))
+            elapsed = time.time() - self.started
+            self.api.error_handler(self.id, '%s completed after timeout: callback=%s elapsed=%.2f results=%s' % (self.label, repr(self), elapsed, repr(results)))
 
     def check_expire(self):
         #SElf.api.output('API_Callback.check_expire() %s' % self)
         if not self.done:
             if time.time() > self.expire:
-                msg = 'error: callback expired: %s' % repr((self.id, self.label))
+                msg = 'error: callback expired: %s' % repr((self.id, self.label, self))
                 self.api.WriteAllClients(msg)
                 if self.callable.callback.__name__ == 'sendString':
                     self.callable.callback('%s.error: %s callback expired', (self.api.channel, self.label))
                 else:
-                    # special case for positions; timeout indicates empty positions 
-                    if self.label == 'positions':
-                        self.callable.callback(self.format_results([]))
-                    else:
-                        self.callable.errback(Failure(Exception(msg)))
+                    self.callable.errback(Failure(Exception(msg)))
                 self.done = True
 
     def format_results(self, results):
@@ -673,13 +667,13 @@ class RTX():
         self.debug_api_messages = bool(int(self.config.get('DEBUG_API_MESSAGES')))
         self.log_client_messages = bool(int(self.config.get('LOG_CLIENT_MESSAGES')))
         self.log_order_updates = bool(int(self.config.get('LOG_ORDER_UPDATES')))
-        self.callback_timeout = int(self.config.get('CALLBACK_TIMEOUT'))
+        self.callback_timeout = {}
+        for t in TIMEOUT_TYPES:
+            self.callback_timeout[t] = int(self.config.get('TIMEOUT_%s' % t))
+            self.output('callback_timeout[%s] = %d' % (t, self.callback_timeout[t]))
         self.now = None
         self.feedzone = pytz.timezone(self.config.get('API_TIMEZONE'))
         self.localzone = tzlocal.get_localzone()
-        if not self.callback_timeout:
-            self.callback_timeout = DEFAULT_CALLBACK_TIMEOUT
-        self.output('callback_timeout=%d' % self.callback_timeout)
         self.current_account = ''
         self.clients = set([])
         self.orders = {}
@@ -822,12 +816,12 @@ class RTX():
         #what='BANK,BRANCH,CUSTOMER,DEPOSIT'
         what='*'
         self.rtx_request('ACCOUNT_GATEWAY', 'ORDER', 'ACCOUNT', what, '',
-                         'accounts', self.handle_accounts, self.accountdata_callbacks, ACCOUNT_QUERY_TIMEOUT)
+                         'accounts', self.handle_accounts, self.accountdata_callbacks, self.callback_timeout['ACCOUNT'])
 
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').advise('ORDERS', '*', '', self.handle_order_update)
         
         self.rtx_request('ACCOUNT_GATEWAY', 'ORDER', 'ORDERS', '*', '',
-                        'orders', self.handle_initial_orders_response, self.openorder_callbacks)
+                        'orders', self.handle_initial_orders_response, self.openorder_callbacks, self.callback_timeout['ORDERSTATUS'])
 
     def handle_initial_orders_response(self, rows):
         self.output('Initial Orders refresh complete.')
@@ -967,7 +961,7 @@ class RTX():
         else:
             return ret
 
-    def rtx_request(self, service, topic, table, what, where, label, handler, cb_list, timeout=0):
+    def rtx_request(self, service, topic, table, what, where, label, handler, cb_list, timeout):
         cxn = self.cxn_get(service, topic)
         cb = API_Callback(self, cxn.id, label, RTX_LocalCallback(self, handler), timeout)
         cxn.request(table, what, where, cb)
@@ -977,7 +971,7 @@ class RTX():
         if self.connected:
             if self.enable_seconds_tick:
                 self.rtx_request('TA_SRV', 'LIVEQUOTE', 'LIVEQUOTE', 'DISP_NAME,TRDTIM_1,TRD_DATE',
-                                 "DISP_NAME='$TIME'", 'tick', self.handle_time, self.timer_callbacks, 5)
+                                 "DISP_NAME='$TIME'", 'tick', self.handle_time, self.timer_callbacks, self.callback_timeout['TIMER'])
         else:
             self.seconds_disconnected += 1
             if self.seconds_disconnected > DISCONNECT_SECONDS:
@@ -1082,6 +1076,7 @@ class RTX():
         if not self.verify_account(account):
           API_Callback(self, 0, 'create-staged-order-ticket', callback).complete({'status': 'Error', 'errorMsg': 'account unknown'})
           return
+
         o=OrderedDict({})
         self.verify_account(account)
         bank, branch, customer, deposit = account.split('.')[:4]
@@ -1097,12 +1092,12 @@ class RTX():
         o['TYPE']='UserSubmitStagedOrder'
 
         # create callback to return to client after initial order update
-        cb = API_Callback(self, tid, 'ticket', callback)
+        cb = API_Callback(self, tid, 'ticket', callback, self.callback_timeout['ORDER'])
         self.ticket_callbacks.append(cb)
         self.pending_tickets[tid]=API_Order(self, tid, o, cb)
         fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
 
-        cb = API_Callback(self, tid, 'ticket', RTX_LocalCallback(self, self.ticket_submit_callback))
+        cb = API_Callback(self, tid, 'ticket', RTX_LocalCallback(self, self.ticket_submit_callback), self.callback_timeout['ORDER'])
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
 
     def ticket_submit_callback(self, data):
@@ -1182,7 +1177,7 @@ class RTX():
         o['TYPE']='UserSubmit%s%s' % (staging, submission)
 
         # create callback to return to client after initial order update
-        cb = API_Callback(self, oid, 'order', callback)
+        cb = API_Callback(self, oid, 'order', callback, self.callback_timeout['ORDER'])
         self.order_callbacks.append(cb)
         if oid in self.orders:
             self.pending_orders[oid]=self.orders[oid]
@@ -1192,7 +1187,7 @@ class RTX():
 
         fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
 
-        cb = API_Callback(self, oid, 'order', RTX_LocalCallback(self, self.order_submit_callback))
+        cb = API_Callback(self, oid, 'order', RTX_LocalCallback(self, self.order_submit_callback), self.callback_timeout['ORDER'])
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
 
     def order_submit_callback(self, data):
@@ -1201,7 +1196,7 @@ class RTX():
 
     def cancel_order(self, oid, callback):
         self.output('cancel_order %s' % oid)
-        cb = API_Callback(self, oid, 'cancel_order', callback)
+        cb = API_Callback(self, oid, 'cancel_order', callback, self.callback_timeout['ORDER'])
         order = self.orders[oid] if oid in self.orders else None
         if order:
             if order.fields['status'] == 'Canceled':
@@ -1222,7 +1217,7 @@ class RTX():
     def symbol_enable(self, symbol, client, callback):
         self.output('symbol_enable(%s,%s,%s)' % (symbol, client, callback))
         if not symbol in self.symbols.keys():
-            cb = API_Callback(self, symbol, 'add-symbol', callback)
+            cb = API_Callback(self, symbol, 'add-symbol', callback, self.callback_timeout['ADDSYMBOL'])
             symbol = API_Symbol(self, symbol, client, cb)
             self.add_symbol_callbacks.append(cb)
         else:
@@ -1256,7 +1251,7 @@ class RTX():
             self.WriteAllClients('connection-status-changed: %s' % status)
 
     def request_accounts(self, callback):
-        cb = API_Callback(self, 0, 'request-accounts', callback)
+        cb = API_Callback(self, 0, 'request-accounts', callback, self.callback_timeout['ACCOUNT'])
         if self.accounts:
             cb.complete(self.accounts)
         elif self.account_request_pending:
@@ -1268,30 +1263,29 @@ class RTX():
 
     def request_positions(self, callback):
         cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
-        cb = API_Callback(self, 0, 'positions', callback, POSITION_QUERY_TIMEOUT)
+        cb = API_Callback(self, 0, 'positions', callback, self.callback_timeout['POSITION'])
         cxn.request('POSITION', '*', '', cb)
         self.position_callbacks.append(cb)
 
     def request_orders(self, callback):
         cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
-        cb = API_Callback(self, 0, 'orders', callback)
-        #cxn.request('ORDERS', '*', "CURRENT_STATUS={'LIVE','PENDING'}", cb)
+        cb = API_Callback(self, 0, 'orders', callback, self.callback_timeout['ORDERSTATUS'])
         cxn.request('ORDERS', '*', '', cb)
         self.openorder_callbacks.append(cb)
 
     def request_order(self, oid, callback):
-        cb = API_Callback(self, oid, 'order_status', callback)
+        cb = API_Callback(self, oid, 'order_status', callback, self.callback_timeout['ORDERSTATUS'])
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').request('ORDERS', '*', "ORIGINAL_ORDER_ID='%s'" % oid, cb)
         self.order_status_callbacks.append(cb)
 
     def request_executions(self, callback):
-        cb = API_Callback(self, 0, 'executions', callback)
+        cb = API_Callback(self, 0, 'executions', callback, self.callback_timeout['ORDERSTATUS'])
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').request('ORDERS', '*', '', cb)
         self.execution_callbacks.append(cb)
 
     def request_account_data(self, account, fields, callback):
         cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
-        cb = API_Callback(self, 0, 'account_data', callback, ACCOUNT_QUERY_TIMEOUT)
+        cb = API_Callback(self, 0, 'account_data', callback, self.callback_timeout['ACCOUNT'])
         bank, branch, customer, deposit = account.split('.')[:4]
         tql_where = "BANK='%s',BRANCH='%s',CUSTOMER='%s',DEPOSIT='%s'" % (bank,branch,customer,deposit)
         if fields:
@@ -1304,7 +1298,7 @@ class RTX():
     def request_global_cancel(self):
         self.rtx_request('ACCOUNT_GATEWAY', 'ORDER', 
                         'ORDERS', 'ORDER_ID,ORIGINAL_ORDER_ID,CURRENT_STATUS,TYPE', "CURRENT_STATUS={'LIVE','PENDING'}",
-                        'global_cancel', self.handle_global_cancel, self.openorder_callbacks)
+                        'global_cancel', self.handle_global_cancel, self.openorder_callbacks, self.callback_timeout['ORDER'])
 
     def handle_global_cancel(self, rows):
         rows = json.loads(rows)

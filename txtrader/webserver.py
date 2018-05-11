@@ -331,14 +331,18 @@ class Leaf(Resource):
             request.setResponseCode(http.UNAUTHORIZED)
             return json.dumps({'status': 'Unauthorized'})
 
+
+    def render_GET(self, request):
+        self.render_POST(request)
+
     def render_POST(self, request):
         # pprint(request.__dict__)
         data = json.loads(request.content.getvalue())
         self.root.output('RX Request %s:%d POST %s %s' % (
             request.client.host, request.client.port, request.path, repr(data)))
-        request.setHeader('Connection', 'close')
+        #request.setHeader('Connection', 'close')
+        #request.channel.persistent = 0
         request.setHeader('Content-type', 'application/json')
-        request.channel.persistent = 0
         d = defer.Deferred()
         d.addCallback(request.write)
         d.addCallback(lambda ign: request.finish())
