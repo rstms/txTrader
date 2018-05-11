@@ -354,9 +354,11 @@ class API_Callback():
         self.callable = callable
         self.done = False
         self.data = None
+        self.expired = False
 
     def complete(self, results):
         """complete callback by calling callable function with value of results"""
+        self.elapsed = time.time() - self.started
         if not self.done:
             ret = self.format_results(results)
             if self.callable.callback.__name__ == 'sendString':
@@ -365,10 +367,9 @@ class API_Callback():
             self.callable.callback(ret)
             self.callable = None
             self.done = True
-
         else:
-            elapsed = time.time() - self.started
-            self.api.error_handler(self.id, '%s completed after timeout: callback=%s elapsed=%.2f results=%s' % (self.label, repr(self), elapsed, repr(results)))
+            self.api.error_handler(self.id, '%s completed after timeout: callback=%s elapsed=%.2f results=%s' % (self.label, repr(self), self.elapsed, repr(results)))
+        self.api.record_callback_metrics(self.label, self.elapsed, self.expired)
 
     def check_expire(self):
         #SElf.api.output('API_Callback.check_expire() %s' % self)
@@ -380,6 +381,7 @@ class API_Callback():
                     self.callable.callback('%s.error: %s callback expired', (self.api.channel, self.label))
                 else:
                     self.callable.errback(Failure(Exception(msg)))
+                self.expired = True
                 self.done = True
 
     def format_results(self, results):
@@ -715,7 +717,18 @@ class RTX():
         self.repeater = LoopingCall(self.EverySecond)
         self.repeater.start(1)
         reactor.connectTCP(self.api_hostname, self.api_port, RtxClientFactory(self))
+        self.callback_metrics = {}
 
+    def record_callback_metrics(self, label, elapsed, expired):
+        m = self.callback_metrics.setdefault(label, {'tot':0, 'min': 9999, 'max': 0, 'avg': 0, 'exp': 0})
+        total = m['tot']
+        m['tot'] += 1
+        m['min'] = min(m['min'], elapsed)
+        m['max'] = max(m['max'], elapsed)
+        m['avg'] = (m['avg'] * total + elapsed) / (total + 1)
+        m['exp'] += int(expired)
+
+        
     def cxn_register(self, cxn):
         if ENABLE_CXN_DEBUG:
             self.output('cxn_register: %s' % repr(cxn))
@@ -978,6 +991,12 @@ class RTX():
                 if SHUTDOWN_ON_DISCONNECT:
                     self.force_disconnect('Realtick Gateway connection timed out after % seconds' % self.seconds_disconnected)
         self.CheckPendingResults()
+
+        if not int(time.time()) % 60:
+            self.EveryMinute()
+
+    def EveryMinute(self):
+        self.output('callback_metrics: %s' % json.dumps(self.callback_metrics))   
 
     def WriteAllClients(self, msg):
         if self.log_client_messages:
