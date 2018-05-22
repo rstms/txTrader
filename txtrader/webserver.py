@@ -148,7 +148,8 @@ class webserver(object):
         """
         account = str(args['account']).upper()
         if 'fields' in args:
-            fields = [str(f) for f in args['fields']]
+            fields = args['fields']
+            fields = [str(f) for f in fields.split(',')] if ',' in fields else [fields]
         else:
             fields = None
         self.api.request_account_data(account, fields, d)
@@ -331,17 +332,31 @@ class Leaf(Resource):
             request.setResponseCode(http.UNAUTHORIZED)
             return json.dumps({'status': 'Unauthorized'})
 
-
     def render_GET(self, request):
-        self.render_POST(request)
+        data = {}
+        # get only supports a single value for each named parameter
+        for key, value in request.args.iteritems():
+          data[key]=value[0]
+        self.root.output('RX GET %s:%d %s %s' % (request.client.host, request.client.port, request.path, repr(data)))
+        self.root.output('request.args=%s' % repr(request.args))
+        request.setHeader('Content-type', 'application/json')
+        d = defer.Deferred()
+        d.addCallback(request.write)
+        d.addCallback(lambda ign: request.finish())
+        d.addErrback(self.api_timeout, request)
+        d.addErrback(lambda ign: request.finish())
+        self.cmdfunc(data, d)
+        return NOT_DONE_YET
+
+    def api_timeout(self, failure, request):
+        self.root.output('WARNING: API timeout errback: %s' % repr(failure))
+        request.setResponseCode(504)
+        return failure
 
     def render_POST(self, request):
         # pprint(request.__dict__)
         data = json.loads(request.content.getvalue())
-        self.root.output('RX Request %s:%d POST %s %s' % (
-            request.client.host, request.client.port, request.path, repr(data)))
-        #request.setHeader('Connection', 'close')
-        #request.channel.persistent = 0
+        self.root.output('RX POST %s:%d %s %s' % (request.client.host, request.client.port, request.path, repr(data)))
         request.setHeader('Content-type', 'application/json')
         d = defer.Deferred()
         d.addCallback(request.write)

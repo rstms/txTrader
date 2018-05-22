@@ -181,7 +181,6 @@ def test_symbol_price(api):
     assert type(p) == dict
     assert p['symbol'] == 'AAPL'
 
-
 def test_query_accounts(api):
     test_account = api.account
 
@@ -203,11 +202,16 @@ def test_query_accounts(api):
     ret = api.query_account(test_account, 'INVALID_FIELD')
     assert ret == None
 
+    ret = api.query_account(test_account, 'INVALID_FIELD_1,INVALID_FIELD_2')
+    assert ret == None
+
     #print('query_account(%s)...' % a)
     data = api.query_account(test_account)
   #print('account[%s]: %s' % (a, repr(data)))
     assert data
     assert type(data)==dict
+
+    fields = [k for k in data.keys() if not k.startswith('_')]
 
     if testmode == 'RTX':
         field = 'EXCESS_EQ'
@@ -222,6 +226,17 @@ def test_query_accounts(api):
     assert sdata
     assert type(sdata)==dict
     assert field in sdata.keys()
+
+    rfields = ','.join(fields[:3])
+    print('requesting fields: %s' % rfields)
+    sdata = api.query_account(test_account, rfields)
+    print('got %s' % repr(sdata))
+    assert sdata
+    assert type(sdata)==dict
+    for field in rfields.split(','):
+      assert field in sdata.keys()
+    assert set(rfields.split(',')) == set(sdata.keys())
+    
 
   #print('account[%s]: %s' % (a, repr(sdata)))
 

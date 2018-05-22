@@ -47,7 +47,26 @@ def test_version(api):
     assert 'python' in v
     assert 'txtrader' in v
 
+def test_status(api):
+    s = api.status()
+    assert s
+    pprint(s)
 
+
+def test_symbol_functions(api):
+    symbols = api.query_symbols()
+    assert type(symbols) == list
+
+    s = api.add_symbol('IBM')
+    assert s
+    pprint(s)
+
+    d = api.query_symbol('IBM')
+    assert d
+    assert type(d) == dict
+    pprint(d)
+
+   
 def test_query_positions(api):
     for i in range(QUERY_POSITION_ITERS):
       p = api.query_positions()

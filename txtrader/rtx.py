@@ -24,6 +24,8 @@ from pprint import pprint
 
 from txtrader.config import Config
 
+CALLBACK_METRIC_HISTORY_LIMIT = 1000
+
 TIMEOUT_TYPES = ['DEFAULT', 'ACCOUNT', 'ADDSYMBOL', 'ORDER', 'ORDERSTATUS', 'POSITION', 'TIMER']
 
 # default RealTick orders to NYSE and Stock type
@@ -179,6 +181,11 @@ class API_Symbol():
         trade_flag = False
         quote_flag = False
         pid = 'API_Symbol(%s)' % self.symbol
+
+        if data == None:
+            self.api.error_handler(pid, 'LIVEQUOTE Advise has been terminated by API')
+            return
+
         if 'TRDPRC_1' in data.keys():
             self.last = self.api.parse_tql_float(data['TRDPRC_1'], pid)
             trade_flag = True
@@ -720,13 +727,16 @@ class RTX():
         self.callback_metrics = {}
 
     def record_callback_metrics(self, label, elapsed, expired):
-        m = self.callback_metrics.setdefault(label, {'tot':0, 'min': 9999, 'max': 0, 'avg': 0, 'exp': 0})
-        total = m['tot']
+        m = self.callback_metrics.setdefault(label, {'tot':0, 'min': 9999, 'max': 0, 'avg': 0, 'exp': 0, 'hst': []})
+        total = m['tot']  
         m['tot'] += 1
         m['min'] = min(m['min'], elapsed)
         m['max'] = max(m['max'], elapsed)
         m['avg'] = (m['avg'] * total + elapsed) / (total + 1)
         m['exp'] += int(expired)
+        m['hst'].append(elapsed)
+        if len(m['hst']) > CALLBACK_METRIC_HISTORY_LIMIT:
+          del m['hst'][0]
 
         
     def cxn_register(self, cxn):
@@ -880,7 +890,7 @@ class RTX():
         if msg:
           self.handle_order_response(msg)
         else:
-          self.force_disconnect('Realtick Gateway Order Status ADVISE connection has been terminated; connection has failed')
+          self.force_disconnect('API Order Status ADVISE connection has been terminated; connection has failed')
 
     def handle_order_response(self, msg):
         #print('---handle_order_response: %s' % repr(msg))

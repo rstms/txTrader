@@ -77,7 +77,7 @@ class API():
         else:
             raise Exception('Error: unknown command: %s\n' % cmd)
 
-    def call_txtrader_api(self, function_name, args):
+    def call_txtrader_post(self, function_name, args):
         url = '%s/%s' % (self.url, function_name)
         headers = {'Content-type': 'application/json'}
         r = requests.post(url, json=args, headers=headers,
@@ -88,23 +88,34 @@ class API():
         r.close()
         return ret
 
+    def call_txtrader_get(self, function_name, args):
+        url = '%s/%s' % (self.url, function_name)
+        headers = {'Content-type': 'application/json'}
+        r = requests.get(url, params=args, headers=headers,
+                          auth=(self.username, self.password))
+        if r.status_code != requests.codes.ok:
+            r.raise_for_status()
+        ret = r.json()
+        r.close()
+        return ret
+
     def help(self, *args):
-        return self.call_txtrader_api('help', {})
+        return self.call_txtrader_get('help', {})
 
     def status(self, *args):
-        return self.call_txtrader_api('status', {})
+        return self.call_txtrader_get('status', {})
 
     def version(self, *args):
-        return self.call_txtrader_api('version', {})
+        return self.call_txtrader_get('version', {})
 
     def shutdown(self, *args):
-        return self.call_txtrader_api('shutdown', {})
+        return self.call_txtrader_post('shutdown', {})
 
     def uptime(self, *args):
-        return self.call_txtrader_api('uptime', {})
+        return self.call_txtrader_get('uptime', {})
 
     def time(self, *args):
-        return self.call_txtrader_api('time', {})
+        return self.call_txtrader_get('time', {})
 
     def query_bars(self, *args):
         args = {
@@ -113,104 +124,104 @@ class API():
             'start': args[2],
             'end': args[3]
         }
-        return self.call_txtrader_api('query_bars', args)
+        return self.call_txtrader_get('query_bars', args)
 
     def add_symbol(self, *args):
-        return self.call_txtrader_api('add_symbol', {'symbol': args[0]})
+        return self.call_txtrader_post('add_symbol', {'symbol': args[0]})
 
     def del_symbol(self, *args):
-        return self.call_txtrader_api('del_symbol', {'symbol': args[0]})
+        return self.call_txtrader_post('del_symbol', {'symbol': args[0]})
 
     def query_symbols(self, *args):
-        return self.call_txtrader_api('query_symbols', {})
+        return self.call_txtrader_get('query_symbols', {})
 
     def query_symbol(self, *args):
-        return self.call_txtrader_api('query_symbol', {'symbol': args[0]})
+        return self.call_txtrader_get('query_symbol', {'symbol': args[0]})
 
     def query_symbol_data(self, *args):
-        return self.call_txtrader_api('query_symbol_data', {'symbol': args[0]})
+        return self.call_txtrader_get('query_symbol_data', {'symbol': args[0]})
 
     def query_accounts(self, *args):
-        return self.call_txtrader_api('query_accounts', {})
+        return self.call_txtrader_get('query_accounts', {})
 
     def query_account(self, *args):
+        print('query_account in_args=%s' % repr(args))
         account = args[0]
         fields = None
         if (len(args) > 1) and args[1]:
-            if type(args[1]) == str:
-                fields = args[1].split(',')
-            elif type(args[1]) == ListType:
+            if type(args[1]) in [str, unicode]:
                 fields = args[1]
+            elif type(args[1]) == ListType:
+                fields = args[1].join(',')
         args = {'account': account}
         if fields:
             args['fields'] = fields
-        return self.call_txtrader_api('query_account', args)
+        print('query_account out_args=%s' % repr(args))
+        return self.call_txtrader_get('query_account', args)
 
     def set_account(self, *args):
         account = args[0]
-        ret = self.call_txtrader_api('set_account', {'account': account})
+        ret = self.call_txtrader_post('set_account', {'account': account})
         if ret:
             self.account = account
         return ret
 
     def query_positions(self, *args):
-        return self.call_txtrader_api('query_positions', {})
+        return self.call_txtrader_get('query_positions', {})
 
     def query_orders(self, *args):
-        return self.call_txtrader_api('query_orders', {})
+        return self.call_txtrader_get('query_orders', {})
 
     def query_order(self, *args):
-        return self.call_txtrader_api('query_order', {'id': args[0]})
+        return self.call_txtrader_get('query_order', {'id': args[0]})
 
     def cancel_order(self, *args):
-        return self.call_txtrader_api('cancel_order', {'id': args[0]})
+        return self.call_txtrader_post('cancel_order', {'id': args[0]})
 
     def query_executions(self, *args):
-        return self.call_txtrader_api('query_executions', {})
+        return self.call_txtrader_get('query_executions', {})
 
     def create_staged_order_ticket(self, *args):
-        return self.call_txtrader_api('create_staged_order_ticket', {})
+        return self.call_txtrader_post('create_staged_order_ticket', {})
 
     def market_order(self, *args):
         symbol, quantity = args[0:2]
-        return self.call_txtrader_api('market_order', {'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
+        return self.call_txtrader_post('market_order', {'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
 
     def stage_market_order(self, *args):
         tag, symbol, quantity = args[0:3]
-        return self.call_txtrader_api('stage_market_order', {'tag': tag, 'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
+        return self.call_txtrader_post('stage_market_order', {'tag': tag, 'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
 
     def limit_order(self, *args):
         symbol, limit_price, quantity = args[0:3]
-        return self.call_txtrader_api('limit_order', {'account': self.account, 'symbol': symbol, 'limit_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_post('limit_order', {'account': self.account, 'symbol': symbol, 'limit_price': float(limit_price), 'quantity': int(quantity)})
 
     def stop_order(self, *args):
         symbol, stop_price, quantity = args[0:3]
-        return self.call_txtrader_api('stop_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_post('stop_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'quantity': int(quantity)})
 
     def stoplimit_order(self, *args):
         symbol, stop_price, limit_price, quantity = args[0:4]
-        return self.call_txtrader_api('stoplimit_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'limit_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_post('stoplimit_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'limit_price': float(limit_price), 'quantity': int(quantity)})
 
     def global_cancel(self, *args):
-        return self.call_txtrader_api('global_cancel', {})
+        return self.call_txtrader_post('global_cancel', {})
 
     def gateway_logon(self, *args):
         username, password = args[0:2]
-        return self.call_txtrader_api('gateway_logon', {'username': username, 'password': password})
+        return self.call_txtrader_post('gateway_logon', {'username': username, 'password': password})
 
     def gateway_logoff(self, *args):
-        return self.call_txtrader_api('gateway_logoff', {})
+        return self.call_txtrader_post('gateway_logoff', {})
 
     def set_primary_exchange(self, *args):
-        return self.call_txtrader_api('set_primary_exchange', {'symbol': args[0], 'exchange': args[1]})
+        return self.call_txtrader_post('set_primary_exchange', {'symbol': args[0], 'exchange': args[1]})
 
     def get_order_route(self, *args):
-        return self.call_txtrader_api('get_order_route', {})
+        return self.call_txtrader_get('get_order_route', {})
 
     def set_order_route(self, *args):
-        route = args[0]
-        print('route: %s' % repr(route))
-        return self.call_txtrader_api('set_order_route', {'route': route})
+        return self.call_txtrader_post('set_order_route', {'route': args[0]})
 
 if __name__=='__main__':
     from sys import argv
