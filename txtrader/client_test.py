@@ -23,7 +23,8 @@ import subprocess
 test_mode = 'RTX'
 test_account = 'DEMO1.TEST.DEMO.2'
 
-QUERY_POSITION_ITERS=1000
+QUERY_POSITION_ITERS=10
+QUERY_ACCOUNT_ITERS=10
 
 from server_test import Server
 
@@ -74,3 +75,12 @@ def test_query_positions(api):
       assert type(p)==dict
       assert test_account in p.keys()
       assert type(p[test_account])==dict
+
+def test_query_account_data(api):
+    for i in range(QUERY_ACCOUNT_ITERS):
+      p = api.query_account(test_account)
+      assert p
+      assert type(p)==dict
+      assert '_cash' in p.keys()
+      assert type(p['_cash'])==float
+

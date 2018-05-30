@@ -20,6 +20,28 @@ import json
 from txtrader.version import VERSION
 from txtrader.config import Config
 
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+
+
+def requests_retry_session(
+    retries=5,
+    backoff_factor=0.3,
+    status_forcelist=(502, 504),
+    session=None,
+):
+    session = session or requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 
 class API():
     def __init__(self, server):
@@ -30,6 +52,9 @@ class API():
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
         self.account = self.config.get('API_ACCOUNT')
+        self.get_retries = int(self.config.get('GET_RETRIES'))
+        self.get_backoff_factor = float(self.config.get('GET_BACKOFF_FACTOR'))
+
         self.url = 'http://%s:%s' % (self.hostname, self.port)
 
         self.cmdmap = {
@@ -91,7 +116,7 @@ class API():
     def call_txtrader_get(self, function_name, args):
         url = '%s/%s' % (self.url, function_name)
         headers = {'Content-type': 'application/json'}
-        r = requests.get(url, params=args, headers=headers,
+        r = requests_retry_session().get(url, params=args, headers=headers,
                           auth=(self.username, self.password))
         if r.status_code != requests.codes.ok:
             r.raise_for_status()
@@ -145,7 +170,6 @@ class API():
         return self.call_txtrader_get('query_accounts', {})
 
     def query_account(self, *args):
-        print('query_account in_args=%s' % repr(args))
         account = args[0]
         fields = None
         if (len(args) > 1) and args[1]:
@@ -156,7 +180,6 @@ class API():
         args = {'account': account}
         if fields:
             args['fields'] = fields
-        print('query_account out_args=%s' % repr(args))
         return self.call_txtrader_get('query_account', args)
 
     def set_account(self, *args):

@@ -338,7 +338,6 @@ class Leaf(Resource):
         for key, value in request.args.iteritems():
           data[key]=value[0]
         self.root.output('RX GET %s:%d %s %s' % (request.client.host, request.client.port, request.path, repr(data)))
-        self.root.output('request.args=%s' % repr(request.args))
         request.setHeader('Content-type', 'application/json')
         d = defer.Deferred()
         d.addCallback(request.write)
