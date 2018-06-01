@@ -296,7 +296,7 @@ class webserver(object):
 
     def json_get_order_route(self, args, d):
         """get_order_route() => {'route_name', None | {parameter_name: parameter_value, ...}}
-        
+
         Return current order route as a dict
         """
         self.api.get_order_route(d)
@@ -310,6 +310,10 @@ class webserver(object):
         self.api.set_order_route(route, d)
 
     def json_help(self, args, d):
+        """help() => {'command': 'command(parameters) => return', ...}
+
+        Return dict containing brief documentation for each command
+        """
         help = {}
         for command in self.commands:
             help[command] = getattr(self, 'json_%s' % command).__doc__

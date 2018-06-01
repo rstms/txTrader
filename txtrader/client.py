@@ -52,6 +52,7 @@ class API():
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
         self.account = self.config.get('API_ACCOUNT')
+        self.mode = self.config.get('MODE')
         self.get_retries = int(self.config.get('GET_RETRIES'))
         self.get_backoff_factor = float(self.config.get('GET_BACKOFF_FACTOR'))
 
@@ -125,7 +126,13 @@ class API():
         return ret
 
     def help(self, *args):
-        return self.call_txtrader_get('help', {})
+        helptext = self.call_txtrader_get('help', {})
+        commands = helptext.keys()
+        commands.sort()
+        print('\nTxTrader [%s] commands:\n%s' % (self.mode, '='*80))
+        for c in commands:
+          print('%s\n' % (helptext[c].strip().replace('\n\n','\n')))
+        return None
 
     def status(self, *args):
         return self.call_txtrader_get('status', {})
