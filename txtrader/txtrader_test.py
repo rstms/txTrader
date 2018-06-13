@@ -556,4 +556,4 @@ def test_set_primary_exchange(api):
 
 def test_help(api):
     help = api.help()
-    assert type(help) == dict
+    assert help == None
