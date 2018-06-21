@@ -45,7 +45,8 @@ class Monitor():
 
     def shutdown_event(self):
         self._callback('shutdown', 'reactor shutdown detected')
-        self.connection.disconnect()
+        if self.connection: 
+            self.connection.disconnect()
 
     def listen(self, _reactor):
         f = StatusClientFactory(self)
