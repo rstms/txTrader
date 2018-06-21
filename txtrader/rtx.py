@@ -24,7 +24,7 @@ from pprint import pprint
 
 from txtrader.config import Config
 
-CALLBACK_METRIC_HISTORY_LIMIT = 1000
+CALLBACK_METRIC_HISTORY_LIMIT = 1024
 
 TIMEOUT_TYPES = ['DEFAULT', 'ACCOUNT', 'ADDSYMBOL', 'ORDER', 'ORDERSTATUS', 'POSITION', 'TIMER']
 
@@ -181,40 +181,40 @@ class API_Symbol():
         trade_flag = False
         quote_flag = False
         pid = 'API_Symbol(%s)' % self.symbol
-
+ 
         if data == None:
-            self.api.error_handler(pid, 'LIVEQUOTE Advise has been terminated by API')
+            self.api.force_disconnect('LIVEQUOTE Advise has been terminated by API for %s' % pid)
             return
 
         if 'TRDPRC_1' in data.keys():
-            self.last = self.api.parse_tql_float(data['TRDPRC_1'], pid)
+            self.last = self.api.parse_tql_float(data['TRDPRC_1'], pid, 'TRDPRC_1')
             trade_flag = True
         if 'TRDVOL_1' in data.keys():
-            self.size = self.api.parse_tql_int(data['TRDVOL_1'], pid)
+            self.size = self.api.parse_tql_int(data['TRDVOL_1'], pid, 'TRDVOL_1')
             trade_flag = True
         if 'ACVOL_1' in data.keys():
-            self.volume = self.api.parse_tql_int(data['ACVOL_1'], pid)
+            self.volume = self.api.parse_tql_int(data['ACVOL_1'], pid, 'ACVOL_1')
             trade_flag = True
         if 'BID' in data.keys():
-            self.bid = self.api.parse_tql_float(data['BID'], pid)
+            self.bid = self.api.parse_tql_float(data['BID'], pid, 'BID')
             if self.bid and 'BIDSIZE' in data.keys():
-                self.bidsize = self.api.parse_tql_int(data['BIDSIZE'], pid)
+                self.bidsize = self.api.parse_tql_int(data['BIDSIZE'], pid, 'BIDSIZE')
             else:
                 self.bidsize = 0
             quote_flag = True
         if 'ASK' in data.keys():
-            self.ask = self.api.parse_tql_float(data['ASK'], pid)
+            self.ask = self.api.parse_tql_float(data['ASK'], pid, 'ASK')
             if self.ask and 'ASKSIZE' in data.keys():
-              self.asksize = self.api.parse_tql_int(data['ASKSIZE'], pid)
+              self.asksize = self.api.parse_tql_int(data['ASKSIZE'], pid, 'ASKSIZE')
             else:
                 self.asksize = 0
             quote_flag = True
         if 'COMPANY_NAME' in data.keys():
-            self.fullname = self.api.parse_tql_str(data['COMPANY_NAME'], pid)
+            self.fullname = self.api.parse_tql_str(data['COMPANY_NAME'], pid, 'COMPANY_NAME')
         if 'HST_CLOSE' in data.keys():
-            self.close = self.api.parse_tql_float(data['HST_CLOSE'], pid)
+            self.close = self.api.parse_tql_float(data['HST_CLOSE'], pid, 'HST_CLOSE')
         if 'VWAP' in data.keys():
-            self.vwap = self.api.parse_tql_float(data['VWAP'], pid)
+            self.vwap = self.api.parse_tql_float(data['VWAP'], pid, 'VWAP')
 
         if self.api.enable_ticker:
             if quote_flag:
@@ -375,8 +375,9 @@ class API_Callback():
             self.callable = None
             self.done = True
         else:
-            self.api.error_handler(self.id, '%s completed after timeout: callback=%s elapsed=%.2f results=%s' % (self.label, repr(self), self.elapsed, repr(results)))
-        self.api.record_callback_metrics(self.label, self.elapsed, self.expired)
+            self.api.error_handler(self.id, '%s completed after timeout: callback=%s elapsed=%.2f' % (self.label, repr(self), self.elapsed))
+            self.api.output('results=%s' % repr(results))
+        self.api.record_callback_metrics(self.label, int(self.elapsed * 1000), self.expired)
 
     def check_expire(self):
         #SElf.api.output('API_Callback.check_expire() %s' % self)
@@ -430,7 +431,7 @@ class API_Callback():
         return positions
 
     def format_orders(self, rows, oid=None):
-        for row in rows:
+        for row in rows or []:
             if row:
                 self.api.handle_order_response(row)
         if oid:
@@ -839,12 +840,16 @@ class RTX():
         #what='BANK,BRANCH,CUSTOMER,DEPOSIT'
         what='*'
         self.rtx_request('ACCOUNT_GATEWAY', 'ORDER', 'ACCOUNT', what, '',
-                         'accounts', self.handle_accounts, self.accountdata_callbacks, self.callback_timeout['ACCOUNT'])
+                         'accounts', self.handle_accounts, self.accountdata_callbacks, self.callback_timeout['ACCOUNT'],
+                         self.handle_initial_account_failure)
 
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').advise('ORDERS', '*', '', self.handle_order_update)
         
         self.rtx_request('ACCOUNT_GATEWAY', 'ORDER', 'ORDERS', '*', '',
                         'orders', self.handle_initial_orders_response, self.openorder_callbacks, self.callback_timeout['ORDERSTATUS'])
+
+    def handle_initial_account_failure(self, message):
+        self.force_disconnect('Initial account query failed (%s)' % repr(message))
 
     def handle_initial_orders_response(self, rows):
         self.output('Initial Orders refresh complete.')
@@ -952,7 +957,7 @@ class RTX():
                 self.output('set_account: processing deferred response.')
                 self.process_set_account(cb.id, cb)
         else:
-            self.error_handler(self.id, 'handle_accounts: unexpected null input')
+            self.handle_initial_account_failure('initial account query returned no data')
 
     def set_account(self, account_name, callback):
         cb = API_Callback(self, account_name, 'set-account', callback)
@@ -984,9 +989,9 @@ class RTX():
         else:
             return ret
 
-    def rtx_request(self, service, topic, table, what, where, label, handler, cb_list, timeout):
+    def rtx_request(self, service, topic, table, what, where, label, handler, cb_list, timeout, error_handler=None):
         cxn = self.cxn_get(service, topic)
-        cb = API_Callback(self, cxn.id, label, RTX_LocalCallback(self, handler), timeout)
+        cb = API_Callback(self, cxn.id, label, RTX_LocalCallback(self, handler, error_handler), timeout)
         cxn.request(table, what, where, cb)
         cb_list.append(cb)
 
@@ -994,19 +999,21 @@ class RTX():
         if self.connected:
             if self.enable_seconds_tick:
                 self.rtx_request('TA_SRV', 'LIVEQUOTE', 'LIVEQUOTE', 'DISP_NAME,TRDTIM_1,TRD_DATE',
-                                 "DISP_NAME='$TIME'", 'tick', self.handle_time, self.timer_callbacks, self.callback_timeout['TIMER'])
+                                 "DISP_NAME='$TIME'", 'tick', self.handle_time, self.timer_callbacks, 
+                                 self.callback_timeout['TIMER'], self.handle_time_error)
         else:
             self.seconds_disconnected += 1
             if self.seconds_disconnected > DISCONNECT_SECONDS:
                 if SHUTDOWN_ON_DISCONNECT:
-                    self.force_disconnect('Realtick Gateway connection timed out after % seconds' % self.seconds_disconnected)
+                    self.force_disconnect('Realtick Gateway connection timed out after %d seconds' % self.seconds_disconnected)
         self.CheckPendingResults()
 
         if not int(time.time()) % 60:
             self.EveryMinute()
 
     def EveryMinute(self):
-        self.output('callback_metrics: %s' % json.dumps(self.callback_metrics))   
+        if self.callback_metrics:
+            self.output('callback_metrics: %s' % json.dumps(self.callback_metrics))   
 
     def WriteAllClients(self, msg):
         if self.log_client_messages:
@@ -1025,19 +1032,19 @@ class RTX():
         self.error_handler(self.id, 'API Disconnect: %s' % reason)
         reactor.stop()
 
-    def parse_tql_float(self, data, pid):
-        ret = self.parse_tql_field(data, pid)
+    def parse_tql_float(self, data, pid, label):
+        ret = self.parse_tql_field(data, pid, label)
         return round(float(ret),2) if ret else 0.0
 
-    def parse_tql_int(self, data, pid):
-        ret = self.parse_tql_field(data, pid)
+    def parse_tql_int(self, data, pid, label):
+        ret = self.parse_tql_field(data, pid, label)
         return int(ret) if ret else 0
 
-    def parse_tql_str(self, data, pid):
-        ret = self.parse_tql_field(data, pid)
+    def parse_tql_str(self, data, pid, label):
+        ret = self.parse_tql_field(data, pid, label)
         return str(ret) if ret else ''
 
-    def parse_tql_field(self, data, pid):
+    def parse_tql_field(self, data, pid, label):
         if data.lower().startswith('error '):
             if data.lower()=='error 0':
                 code = 'Field Not Found'
@@ -1051,7 +1058,7 @@ class RTX():
                 code = 'Field Reset'
             else:
                 code = 'Unknown Field Error'
-            self.error_handler(pid, 'Field Parse Failure: %s (%s)' % (repr(data), code))
+            self.error_handler(pid, 'Field Parse Failure: %s=%s (%s)' % (label, repr(data), code))
             ret = None
         else:
             ret = data
@@ -1077,6 +1084,10 @@ class RTX():
                     self.WriteAllClients('time: %s %s:00' % (self.now.strftime('%Y-%m-%d'), self.now.strftime('%H:%M')))
         else:
             self.error_handler(self.id, 'handle_time: unexpected null input')
+
+    def handle_time_error(self, error):
+        #time timeout error is reported as an expired callback
+        self.output('time_error: %s' % repr(error))
 
     def connect(self):
         self.update_connection_status('Connecting')

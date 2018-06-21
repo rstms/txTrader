@@ -10,6 +10,7 @@ txtrader/client_test.py
 txtrader/config.py
 txtrader/conftest.py
 txtrader/monitor.py
+txtrader/monitor_test.py
 txtrader/rtx.py
 txtrader/server_test.py
 txtrader/tcpclient.py

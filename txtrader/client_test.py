@@ -67,7 +67,6 @@ def test_symbol_functions(api):
     assert type(d) == dict
     pprint(d)
 
-   
 def test_query_positions(api):
     for i in range(QUERY_POSITION_ITERS):
       p = api.query_positions()
@@ -83,4 +82,3 @@ def test_query_account_data(api):
       assert type(p)==dict
       assert '_cash' in p.keys()
       assert type(p['_cash'])==float
-

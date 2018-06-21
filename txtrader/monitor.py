@@ -16,7 +16,6 @@ import time
 from twisted.internet import reactor, protocol, task
 from twisted.protocols.basic import NetstringReceiver
 
-
 class Monitor():
     def __init__(self, host='localhost', port=50090, user=None, password=None, callbacks=None):
         """Initialize Monitor:
@@ -86,6 +85,7 @@ class Monitor():
 class StatusClient(NetstringReceiver):
 
     def __init__(self):
+        self.MAX_LENGTH = 0x1000000
         self.channel = ''
         self.message_types = []
         self.channel_map = {}
@@ -125,7 +125,6 @@ class StatusClient(NetstringReceiver):
 
     def connectionLost(self, reason):
         pass
-
 
 class StatusClientFactory(protocol.ClientFactory):
     protocol = StatusClient
