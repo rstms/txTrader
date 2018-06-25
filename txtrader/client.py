@@ -63,7 +63,7 @@ class API():
             'status': (self.status, False, ()),
             'version': (self.version, False, ()),
             'time': (self.time, False, ()),
-            'shutdown': (self.shutdown, False, ()),
+            'shutdown': (self.shutdown, False, ('message')),
             'uptime': (self.uptime, False, ()),
             'query_bars': (self.query_bars, True, ('symbol', 'interval', 'start_time', 'end_time')),
             'add_symbol': (self.add_symbol, True, ('symbol',)),
@@ -141,7 +141,7 @@ class API():
         return self.call_txtrader_get('version', {})
 
     def shutdown(self, *args):
-        return self.call_txtrader_post('shutdown', {})
+        return self.call_txtrader_post('shutdown', {'message': args[0]})
 
     def uptime(self, *args):
         return self.call_txtrader_get('uptime', {})

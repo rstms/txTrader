@@ -38,10 +38,13 @@ class webserver(object):
         d.callback(json.dumps(data))
 
     def json_shutdown(self, args, d):
-        """shutdown() 
+        """shutdown(message) 
 
         Request server shutdown
         """
+        message = str(args['message'])
+        self.output('ALERT: shutdown: %s' % message)
+
         # self.output('shutdown()')
         reactor.callLater(1, reactor.stop)
         self.render(d, 'shutdown requested')
