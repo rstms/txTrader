@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 nargs=$#
 args=
 while [ $nargs -gt 0 ]

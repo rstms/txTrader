@@ -1,0 +1,4 @@
+#!/bin/bash
+IP=$(sudo docker network inspect bridge | jq -r ".[0].Containers|.[] |  select(.Name == \"$1\")| .IPv4Address | split(\"/\")[0]")
+[ -z "$IP" ] && (echo >&2 "ERROR: IP for container $1 not found"; exit 1)
+echo $IP

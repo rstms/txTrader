@@ -1,0 +1,7 @@
+#!/bin/sh
+exec 2>&1
+_USER=`cat /root/txtrader_user`
+_HOST=`cat /root/txtrader_host`
+_PORT='-L 50070:127.0.0.1:50070 -L 50090:127.0.0.1:50090'
+_KEY=/root/.ssh/txtrader
+exec ssh -v -N $_PORT -i $_KEY -o ExitOnForwardFailure=yes $_USER@$_HOST

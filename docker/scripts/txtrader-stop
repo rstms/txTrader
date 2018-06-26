@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo su -l ec2-user -c "cd ~/src/icecap-genotick/txtrader && make stop"
+eval exec ssh root@$(containerip txclient) svc -d /etc/service/txtrader

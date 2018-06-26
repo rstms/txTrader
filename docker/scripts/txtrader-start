@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo su -l ec2-user -c "cd ~/src/icecap-genotick/txtrader && make start"
+eval exec ssh root@$(containerip txclient) svc -u /etc/service/txtrader

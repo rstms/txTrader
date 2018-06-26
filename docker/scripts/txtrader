@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 nargs=$#
 args=
 while [ $nargs -gt 0 ]
@@ -6,6 +6,4 @@ do
   args="\"${@:$nargs:1}\" $args"
   nargs=`expr $nargs - 1`
 done
-NAME=$(basename $0)
-NAME=${NAME#ssh.}
-eval exec ssh root@$(containerip $NAME) $args
+eval exec ssh root@$(containerip txclient) txtrader $args
