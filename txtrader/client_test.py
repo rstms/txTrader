@@ -23,7 +23,7 @@ import subprocess
 test_mode = 'RTX'
 test_account = 'DEMO1.TEST.DEMO.2'
 
-QUERY_POSITION_ITERS=10
+QUERY_POSITION_ITERS=100
 QUERY_ACCOUNT_ITERS=10
 
 from server_test import Server

@@ -36,9 +36,10 @@ auth=(username, password)
 r = requests.get(url(cmd), params=args, headers=headers, auth=auth)
 
 if r.status_code == 200:
-    #print(r.text)
-    print('%s' % json.dumps(json.loads(r.text),indent=2))
+    print(r.text)
+    #print('%s' % json.dumps(json.loads(r.text),indent=2))
 else:
+    sys.stderr.write('error: %d' % r.status_code)
     sys.stderr.write(r.text)
     status = 1
 

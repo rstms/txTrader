@@ -23,7 +23,6 @@ from txtrader.config import Config
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
-
 def requests_retry_session(
     retries=5,
     backoff_factor=0.3,
@@ -117,7 +116,7 @@ class API():
     def call_txtrader_get(self, function_name, args):
         url = '%s/%s' % (self.url, function_name)
         headers = {'Content-type': 'application/json'}
-        r = requests_retry_session().get(url, params=args, headers=headers,
+        r = requests_retry_session(retries=self.get_retries, backoff_factor=self.get_backoff_factor).get(url, params=args, headers=headers,
                           auth=(self.username, self.password))
         if r.status_code != requests.codes.ok:
             r.raise_for_status()
