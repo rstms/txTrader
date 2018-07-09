@@ -115,7 +115,7 @@ start_wait: start
 stop:
 	@echo "Stopping Service..."
 	sudo touch /etc/service/txtrader/down
-	@ps ax | egrep [t]xtrader.tac && txtrader rtx shutdown || echo not running
+	@ps ax | egrep [t]xtrader.tac && txtrader rtx shutdown "make stop" || echo not running
 	sudo svc -d /etc/service/txtrader
 	@while [ "$$(sudo svstat /etc/service/txtrader| awk '{print $$2}')" != 'down' ]; do echo -n '.'; sleep 1; done
 

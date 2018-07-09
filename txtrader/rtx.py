@@ -106,6 +106,8 @@ class API_Symbol():
         self.volume = 0
         self.close = 0.0
         self.vwap = 0.0
+        self.high = 0.0
+        self.low = 0.0
         self.rawdata = ''
         self.api.symbols[symbol] = self
         self.last_quote = ''
@@ -123,13 +125,8 @@ class API_Symbol():
         return str(self)
 
     def export(self):
-
-        return {
+        ret = {
             'symbol': self.symbol,
-            'bid': self.bid,
-            'bidsize': self.bid_size,
-            'ask': self.ask,
-            'asksize': self.ask_size,
             'last': self.last,
             'size': self.size,
             'volume': self.volume,
@@ -137,6 +134,15 @@ class API_Symbol():
             'vwap': self.vwap,
             'fullname': self.fullname
         }
+        if self.api.enable_high_low: 
+          ret['high'] = self.high
+          ret['low'] = self.low
+        if self.api.enable_ticker:
+          ret['bid'] = self.bid
+          ret['bidsize'] = self.bid_size
+          ret['ask'] = self.ask
+          ret['asksize'] = self.ask_size
+        return ret
 
     def add_client(self, client):
         self.output('API_Symbol %s %s adding client %s' %
@@ -175,6 +181,8 @@ class API_Symbol():
             fields = 'TRDPRC_1,TRDVOL_1,ACVOL_1'
             if self.api.enable_ticker:
                 fields += ',BID,BIDSIZE,ASK,ASKSIZE'
+            if self.api.enable_high_low:
+                fields += ',HIGH_1,LOW_1'
             self.cxn.advise('LIVEQUOTE', fields, "DISP_NAME='%s'" % self.symbol, self.parse_fields)
 
     def parse_fields(self, cxn, data):
@@ -188,6 +196,12 @@ class API_Symbol():
 
         if 'TRDPRC_1' in data.keys():
             self.last = self.api.parse_tql_float(data['TRDPRC_1'], pid, 'TRDPRC_1')
+            trade_flag = True
+        if 'HIGH_1' in data.keys():
+            self.high = self.api.parse_tql_float(data['HIGH_1'], pid, 'HIGH_1')
+            trade_flag = True
+        if 'LOW_1' in data.keys():
+            self.low = self.api.parse_tql_float(data['LOW_1'], pid, 'LOW_1')
             trade_flag = True
         if 'TRDVOL_1' in data.keys():
             self.size = self.api.parse_tql_int(data['TRDVOL_1'], pid, 'TRDVOL_1')
@@ -672,6 +686,7 @@ class RTX():
         self.http_port = int(self.config.get('HTTP_PORT'))
         self.tcp_port = int(self.config.get('TCP_PORT'))
         self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
+        self.enable_high_low= bool(int(self.config.get('ENABLE_HIGH_LOW')))
         self.enable_seconds_tick = bool(int(self.config.get('ENABLE_SECONDS_TICK')))
         self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
         self.debug_api_messages = bool(int(self.config.get('DEBUG_API_MESSAGES')))
