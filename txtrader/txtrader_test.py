@@ -56,11 +56,7 @@ def test_stock_prices(api):
         ('last', float, True),
         ('size', int, True),
         ('volume', int, True),
-        ('close', float, True),
-        ('bid', float, False),
-        ('bidsize', int, False),
-        ('ask', float, False),
-        ('asksize', int, False)
+        ('close', float, True)
     ]
 
     for key, _type, required in tdata:
