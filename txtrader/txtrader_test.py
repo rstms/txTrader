@@ -122,7 +122,12 @@ def test_buy_sell(api):
 
 def test_partial_fill(api):
     print()
-    quantity = 10000
+    oldroute = api.get_order_route()
+    assert type(oldroute) == dict
+    assert oldroute.keys() == ['DEMOEUR']
+    assert api.set_order_route('DEMO')
+    assert api.get_order_route() == {'DEMO': None}
+    quantity = 500
     symbol = 'COWN'
     print('buying %d %s' % (quantity, symbol))
     p = api.add_symbol(symbol)
@@ -134,16 +139,24 @@ def test_partial_fill(api):
     assert not o['status'] == 'Filled'
     oid = o['permid']
     print('oid=%s' % oid)
+    partial_fills = 0
     while o['status'] != 'Filled':
-         o = api.query_order(oid)
-         #pprint(o)
-         status = o['status']
-         filled = o['filled'] if 'filled' in o.keys() else None 
-         remaining = o['remaining'] if 'remaining' in o.keys() else None 
-         average_price = o['avgfillprice'] if 'avgfillprice' in o.keys() else None
-         print('status=%s filled=%s remaining=%s average_price=%s type=%s' % (status, filled, remaining, average_price, o['TYPE']))
-         assert not (status=='Filled' and filled < quantity)
+        o = api.query_order(oid)
+        #o={'status':'spoofed','TYPE':'spoofed'}
+        #pprint(o)
+        status = o['status']
+        filled = o['filled'] if 'filled' in o.keys() else None 
+        remaining = o['remaining'] if 'remaining' in o.keys() else None 
+        if (int(filled) > 0) and (int(remaining) > 0) and (int(filled) < quantity):
+            partial_fills += 1    
+        average_price = o['avgfillprice'] if 'avgfillprice' in o.keys() else None
+        print('status=%s filled=%s remaining=%s average_price=%s type=%s' % (status, filled, remaining, average_price, o['TYPE']))
+        assert not (status=='Filled' and filled < quantity)
+        assert status in ['Submitted', 'Pending', 'Filled']
+        time.sleep(1)
+    assert partial_fills
     o = api.market_order(symbol, quantity*-1)
+    assert api.set_order_route(oldroute)
 
 def test_status(api):
     assert api.status() == 'Up'

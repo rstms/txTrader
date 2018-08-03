@@ -297,6 +297,16 @@ class API_Order():
         if json.dumps(self.fields) != field_state:
             self.api.send_order_status(self)
 
+
+    def update_fill_fields(self):
+        if self.fields['TYPE'] in ['UserSubmitOrder', 'ExchangeTradeOrder']:
+            if 'VOLUME_TRADED' in self.fields:
+                self.fields['filled'] =self.fields['VOLUME_TRADED']
+            if 'ORDER_RESIDUAL' in self.fields:
+                self.fields['remaining']=self.fields['ORDER_RESIDUAL']
+            if 'AVG_PRICE' in self.fields: 
+                self.fields['avgfillprice']=self.fields['AVG_PRICE']
+
     def render(self):
         # customize fields for standard txTrader order status 
         self.fields['permid']=self.fields['ORIGINAL_ORDER_ID']
@@ -310,21 +320,23 @@ class API_Order():
             self.fields['status'] = 'Submitted'
         elif status=='LIVE':
             self.fields['status'] = 'Pending'
+            self.update_fill_fields()
         elif status=='COMPLETED':
             if self.is_filled():
                 self.fields['status'] = 'Filled'
                 if otype == 'ExchangeTradeOrder':
-                    self.fields['filled'] =self.fields['VOLUME_TRADED']
-                    self.fields['remaining']=0
-                    self.fields['avgfillprice']=self.fields['AVG_PRICE']
+                    self.update_fill_fields()
             elif otype in ['UserSubmitOrder', 'UserSubmitStagedOrder', 'UserSubmitStatus', 'ExchangeReportStatus']:
                 self.fields['status'] = 'Submitted'
+                self.update_fill_fields()
             elif otype == 'UserSubmitCancel':
                 self.fields['status'] = 'Cancelled'
             elif otype == 'UserSubmitChange':
                 self.fields['status'] = 'Changed'
             elif otype == 'ExchangeAcceptOrder':
                 self.fields['status'] = 'Accepted'
+            elif otype == 'ExchangeTradeOrder':
+                self.update_fill_fields()
             elif otype in ['ClerkReject', 'ExchangeKillOrder']:
                 self.fields['status'] = 'Error'
             else:

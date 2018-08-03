@@ -68,7 +68,7 @@ class Server():
     def __del__(self):
         print()
         print('Stopping txTrader:  Waiting for %s to terminate...' % repr(self.process.pid))
-        self.api.shutdown()
+        self.api.shutdown('test_termination')
         #os.kill(self.process.pid, signal.SIGTERM)
         self.process.wait()
         print('Terminated; exit=%d' % (self.process.returncode))
