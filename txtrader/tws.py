@@ -36,7 +36,7 @@ from ib.ext.ExecutionFilter import ExecutionFilter
 from ib.ext.Execution import Execution
 from ib.opt import Connection, message
 
-class TWS_Symbol():
+class TWS_Symbol(object):
     def __init__(self, tws, symbol, client_id):
         self.tws = tws
         self.output = tws.output
@@ -107,7 +107,7 @@ class TWS_Symbol():
             self.symbol, self.last, self.size, self.volume))
 
 
-class TWS_Callback():
+class TWS_Callback(object):
     def __init__(self, tws, id, label, callable, timeout=0):
         """type is stored and used to index dict of return results on callback"""
         self.tws = tws
@@ -147,7 +147,7 @@ class TWS_Callback():
                 self.done = True
 
 
-class TWS():
+class TWS(object):
 
     def __init__(self):
         self.output('TWS init')

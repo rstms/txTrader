@@ -16,7 +16,7 @@ import time
 from twisted.internet import reactor, protocol, task
 from twisted.protocols.basic import NetstringReceiver
 
-class Monitor():
+class Monitor(object):
     def __init__(self, host='localhost', port=50090, user=None, password=None, callbacks=None):
         """Initialize Monitor:
           connection parameters: host, port, user, password, 

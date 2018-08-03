@@ -17,7 +17,7 @@ import time
 
 testmode = 'RTX'
 
-class Server():
+class Server(object):
     def __init__(self):
         self.mode = os.environ['TXTRADER_TEST_MODE'] if 'TXTRADER_TEST_MODE' in os.environ else 'RTX'
         self.mode = self.mode.upper()

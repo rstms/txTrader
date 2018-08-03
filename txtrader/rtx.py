@@ -88,7 +88,7 @@ class RtxClientFactory(ReconnectingClientFactory):
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
         self.rtx.gateway_connect(None)
 
-class API_Symbol():
+class API_Symbol(object):
     def __init__(self, api, symbol, client_id, init_callback):
         self.api = api
         self.id = str(uuid1())
@@ -240,7 +240,7 @@ class API_Symbol():
     #    self.output('API_Symbol update: %s' % data)
     #    self.rawdata = data
 
-class API_Order():
+class API_Order(object):
     def __init__(self, api, oid, data, callback=None):
         self.api = api
         self.oid = oid
@@ -374,7 +374,7 @@ class API_Order():
                 return True
         return False
 
-class API_Callback():
+class API_Callback(object):
     def __init__(self, api, id, label, callable, timeout=0):
         """callable is stored and used to return results later"""
         #api.output('API_Callback.__init__() %s' % self)
@@ -479,7 +479,7 @@ class API_Callback():
                 results[k]['updates']=v.updates
         return results
 
-class RTX_Connection():
+class RTX_Connection(object):
     def __init__(self, api, service, topic, enable_logging=False):
         self.api = api
         self.id = str(uuid1())
@@ -664,7 +664,7 @@ class RTX_Connection():
         return ret
 
 
-class RTX_LocalCallback:
+class RTX_LocalCallback(object):
     def __init__(self, api, callback_handler, errback_handler=None):
         self.api = api
         self.callable = callback_handler
@@ -683,7 +683,7 @@ class RTX_LocalCallback:
             self.api.error_handler(repr(self), 'Failure: undefined errback_handler for Connection: %s error=%s' % (repr(self), repr(error)))
 
 
-class RTX():
+class RTX(object):
     def __init__(self):
         self.label = 'RTX Gateway'
         self.channel = 'rtx'

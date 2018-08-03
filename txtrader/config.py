@@ -12,7 +12,7 @@
 """
 from os import environ
 
-class Config():
+class Config(object):
     """initialize with label to make all /etc/txtrader vars to use the form TXTRADER_label_VARNAME"""
 
     def __init__(self, label=''):

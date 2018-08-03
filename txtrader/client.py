@@ -42,7 +42,7 @@ def requests_retry_session(
     session.mount('https://', adapter)
     return session
 
-class API():
+class API(object):
     def __init__(self, server):
         self.server = server
         self.config = Config(server)
