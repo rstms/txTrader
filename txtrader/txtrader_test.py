@@ -250,7 +250,7 @@ def test_query_accounts(api):
   #print('account[%s]: %s' % (a, repr(sdata)))
 
 def _wait_for_fill(api, oid, return_on_error=False):
-    print('waiting for fill...')
+    print('Waiting for order %s to fill...' % oid)
     done = False
     last_status = ''
     while not done:
@@ -278,7 +278,9 @@ def _position(api, account):
     return p
 
 def _market_order(api, symbol, quantity, return_on_error=False):
+    print('Sending market_order(%s, %d)...' % (symbol, quantity))
     o = api.market_order(symbol, quantity)
+    print('market_order returned %s' % repr(o))
     assert o 
     assert 'permid' in o.keys()
     assert 'status' in o.keys()
@@ -430,19 +432,9 @@ def test_trade_and_query_executions_and_query_order(api):
     assert o['status']=='Filled'
 
 """
-    STRAT_PARAMETERS fields per 2017-09-29 email from Raymond Tsui (rtsui@ezsoft.com)
+    ALGO ORDER fields per 2018-07-24 email from Raymond Tsui (rtsui@ezsoft.com)
 
-        847=15      (type?)
-        9000=15     (version?) 
-        9007=1      Volume Min
-        9008=2      Volume Max
-        9039=0.03   iWouldPrice (>=0)
-        9088=1      Execution Style (1=Passive, 2=Neutral, 3=Aggressive, 4=Custom)
-        9076=4      MinDarkFill
-        9043=0      MOO Allowed (0=unchecked, 1=checked)
-        9011=0      MOC Allowed (0=unchedked, 1=checked)
 """
- 
 @pytest.mark.algo
 def test_algo_order(api):
     print()
@@ -456,29 +448,31 @@ def test_algo_order(api):
     assert oldroute in ['DEMO', 'DEMOEUR']
 
     algo_order_parameters = {
-        'STRAT_ID': 'ABRAXAS',
-        'BOOKING_TYPE': '0',
-        'STRAT_PARAMETERS': {
-            '847': '15',
-            '9000': '15',
-            '9007': '1',
-            '9008': '2',
-            '9039': '0.03',
-            '9088': '1',
-            '9076': '4',
-            '9043': '0',
-            '9011': '0',
-        },
-        'STRAT_TIME_TAGS': '-1:-2',
-        'ORDER_FLAGS_3': 0,
-        'STRAT_TARGET': 'ATDL',
-        'STRATEGY_NAME': 'Abraxas',
-        'SETTLE_TYPE_SYNTHETIC': -1,
-        'STRAT_TYPE': 'BNYCONVERGEX_BNYAlgos_from_RT_US_timefix',
-        'STRAT_STRING_40': 'ABRAXAS',
-        'DEST_ROUTE': 'TEST-CVGX-USALGO-ATD'
+      "STRAT_ID": "BEST",
+      "BOOKING_TYPE": 3,
+      "STRAT_TIME_TAGS": "168;126",
+      "STRAT_PARAMETERS": {
+        "99970": "2",
+        "99867": "N",
+        "847": "BEST",
+        "90057": "BEST",
+        "91000": "4.1.95"
+      },
+      "ORDER_FLAGS_3": 0,
+      "ORDER_CLONE_FLAG": 1,
+      "STRAT_TARGET": "ATDL",
+      "STRATEGY_NAME": "BEST",
+      "STRAT_REDUNDANT_DATA": {
+        "UseStartTime": "false",
+        "UseEndTime": "false",
+        "cConditionalType": "{NULL}"
+      },
+      "STRAT_TIME_ZONE": "America/New_York",
+      "STRAT_TYPE": "COWEN_ATM_US_EQT",
+      "STRAT_STRING_40": "BEST",
+      "UTC_OFFSET": "-240"
     }
-    route = 'TEST-CVGX-USALGO-ATD'
+    route = 'TEST-ATM-ALGO'
     p = {route: algo_order_parameters}
 
     ret = api.set_order_route(p)
@@ -488,7 +482,7 @@ def test_algo_order(api):
 
     oid = _market_order(api, 'INTC', 100)
 
-    assert api.query_order('oid')['status'] == 'Filled'
+    assert api.query_order(oid)['status'] == 'Filled'
 
     assert api.set_order_route(oldroute)
 

@@ -626,10 +626,10 @@ class RTX_Connection(object):
     def unadvise(self, table, what, where, callback):
         return self.query('unadvise', table, what, where, 'UNADVISE_OK', None, None, None, 'OnOtherAck', callback)
 
-    def poke(self, table, what, where, data, callback):
+    def poke(self, table, what, where, data, ack_callback, callback):
         tql = '%s;%s;%s!%s' % (table, what, where, data)
         self.last_query = 'poke: %s' % tql
-        return self.send('poke', tql, "POKE_OK", None, None, None, 'OnOtherAck', callback)
+        return self.send('poke', tql, "POKE_OK", ack_callback, None, None, 'OnOtherAck', callback)
 
     def execute(self, command, callback):
         self.last_query = 'execute: %s' % command
@@ -749,10 +749,10 @@ class RTX(object):
         self.idle_cxn = {}
         self.cx_time = None
         self.seconds_disconnected = 0
+        self.callback_metrics = {}
+        reactor.connectTCP(self.api_hostname, self.api_port, RtxClientFactory(self))
         self.repeater = LoopingCall(self.EverySecond)
         self.repeater.start(1)
-        reactor.connectTCP(self.api_hostname, self.api_port, RtxClientFactory(self))
-        self.callback_metrics = {}
 
     def record_callback_metrics(self, label, elapsed, expired):
         m = self.callback_metrics.setdefault(label, {'tot':0, 'min': 9999, 'max': 0, 'avg': 0, 'exp': 0, 'hst': []})
@@ -1164,8 +1164,13 @@ class RTX(object):
         self.pending_tickets[tid]=API_Order(self, tid, o, cb)
         fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
 
+        acb = API_Callback(self, tid, 'ticket-ack', RTX_LocalCallback(self, self.ticket_submit_ack_callback), self.callback_timeout['ORDER'])
         cb = API_Callback(self, tid, 'ticket', RTX_LocalCallback(self, self.ticket_submit_callback), self.callback_timeout['ORDER'])
-        self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
+        self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, acb, cb)
+
+    def ticket_submit_ack_callback(self, data):
+        """called when staged order ticket request has been submitted with 'poke' and Ack has returned""" 
+        self.output('staged order ticket submission acknowledged: %s' % repr(data))
 
     def ticket_submit_callback(self, data):
         """called when staged order ticket request has been submitted with 'poke' and OnOtherAck has returned""" 
@@ -1194,7 +1199,7 @@ class RTX(object):
         if self.order_route[route]:
             for k,v in self.order_route[route].items():
                 # encode strategy parameters in 0x01 delimited format
-                if k == 'STRAT_PARAMETERS':
+                if k in ['STRAT_PARAMETERS', 'STRAT_REDUNDANT_DATA']:
                     v = ''.join(['%s\x1F%s\x01' % i for i in v.items()])
                 o[k]=v
 
@@ -1254,8 +1259,13 @@ class RTX(object):
 
         fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
 
+        acb = API_Callback(self, oid, 'order-ack', RTX_LocalCallback(self, self.order_submit_ack_callback), self.callback_timeout['ORDER'])
         cb = API_Callback(self, oid, 'order', RTX_LocalCallback(self, self.order_submit_callback), self.callback_timeout['ORDER'])
-        self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
+        self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, acb, cb)
+
+    def order_submit_ack_callback(self, data):
+        """called when order has been submitted with 'poke' and Ack has returned""" 
+        self.output('order submission acknowleded: %s' % repr(data))
 
     def order_submit_callback(self, data):
         """called when order has been submitted with 'poke' and OnOtherAck has returned""" 
@@ -1276,7 +1286,7 @@ class RTX(object):
                 msg['TYPE']='UserSubmitCancel'
                 msg['REFERS_TO_ID']=oid
                 fields= ','.join(['%s=%s' %(i,v) for i,v in msg.iteritems()])
-                self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, cb)
+                self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, None, cb)
                 self.cancel_callbacks.append(cb)
         else:
             cb.complete({'status': 'Error', 'errorMsg': 'Order not found', 'id': oid})
