@@ -192,9 +192,10 @@ class webserver(object):
         Submit a market order, returning dict containing new order fields
         """
         account = str(args['account'])
+        route = str(args['route'])
         symbol = str(args['symbol']).upper()
         quantity = int(args['quantity'])
-        self.api.market_order(account, symbol, quantity, d)
+        self.api.market_order(account, route, symbol, quantity, d)
 
     def json_limit_order(self, args, d):
         """limit_order('account', 'symbol', price, quantity) => {'field':, data, ...}
@@ -202,10 +203,11 @@ class webserver(object):
         Submit a limit order, returning dict containing new order fields
         """
         account = str(args['account'])
+        route = str(args['route'])
         symbol = str(args['symbol']).upper()
         price = float(args['limit_price'])
         quantity = int(args['quantity'])
-        self.api.limit_order(account, symbol, price, quantity, d)
+        self.api.limit_order(account, route, symbol, price, quantity, d)
 
     def json_stop_order(self, args, d):
         """stop_order('account', 'symbol', price, quantity) => {'field':, data, ...}
@@ -213,10 +215,11 @@ class webserver(object):
         Submit a stop order, returning dict containing new order fields
         """
         account = str(args['account'])
+        route = str(args['route'])
         symbol = str(args['symbol']).upper()
         price = float(args['stop_price'])
         quantity = int(args['quantity'])
-        self.api.stop_order(account, symbol, price, quantity, d)
+        self.api.stop_order(account, route, symbol, price, quantity, d)
 
     def json_stoplimit_order(self, args, d):
         """stoplimit_order('account', 'symbol', stop_price, limit_price, quantity) => {'field':, data, ...}
@@ -224,11 +227,12 @@ class webserver(object):
         Submit a stop-limit order, returning dict containing new order fields
         """
         account = str(args['account'])
+        route = str(args['route'])
         symbol = str(args['symbol']).upper()
         stop_price = float(args['stop_price'])
         limit_price = float(args['limit_price'])
         quantity = int(args['quantity'])
-        self.api.stoplimit_order(account, symbol, stop_price, limit_price, quantity, d)
+        self.api.stoplimit_order(account, route, symbol, stop_price, limit_price, quantity, d)
 
     def json_query_bars(self, args, d):
         """query_bars('symbol', bar_period, 'start', 'end')

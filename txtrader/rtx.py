@@ -1120,20 +1120,20 @@ class RTX(object):
         self.update_connection_status('Connecting')
         self.output('Awaiting startup response from RTX gateway at %s:%d...' % (self.api_hostname, self.api_port))
 
-    def market_order(self, account, symbol, quantity, callback):
-        return self.submit_order(account, 'market', 0, 0, symbol, int(quantity), callback)
+    def market_order(self, account, route, symbol, quantity, callback):
+        return self.submit_order(account, route, 'market', 0, 0, symbol, int(quantity), callback)
 
-    def limit_order(self, account, symbol, limit_price, quantity, callback):
-        return self.submit_order(account, 'limit', float(limit_price), 0, symbol, int(quantity), callback)
+    def limit_order(self, account, route, symbol, limit_price, quantity, callback):
+        return self.submit_order(account, route, 'limit', float(limit_price), 0, symbol, int(quantity), callback)
 
-    def stop_order(self, account, symbol, stop_price, quantity, callback):
-        return self.submit_order(account, 'stop', 0, float(stop_price), symbol, int(quantity), callback)
+    def stop_order(self, account, route, symbol, stop_price, quantity, callback):
+        return self.submit_order(account, route, 'stop', 0, float(stop_price), symbol, int(quantity), callback)
 
-    def stoplimit_order(self, account, symbol, stop_price, limit_price, quantity, callback):
-        return self.submit_order(account, 'stoplimit', float(limit_price), float(stop_price), symbol, int(quantity), callback)
+    def stoplimit_order(self, account, route, symbol, stop_price, limit_price, quantity, callback):
+        return self.submit_order(account, route, 'stoplimit', float(limit_price), float(stop_price), symbol, int(quantity), callback)
 
-    def stage_market_order(self, tag, account, symbol, quantity, callback):
-        return self.submit_order(account, 'market', 0, 0, symbol, int(quantity), callback, staged=tag)
+    def stage_market_order(self, tag, account, route, symbol, quantity, callback):
+        return self.submit_order(account, route, 'market', 0, 0, symbol, int(quantity), callback, staged=tag)
 
     def create_order_id(self):
         return str(uuid1())
@@ -1176,12 +1176,16 @@ class RTX(object):
         """called when staged order ticket request has been submitted with 'poke' and OnOtherAck has returned""" 
         self.output('staged order ticket submitted: %s' % repr(data))
 
-    def submit_order(self, account, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
+    def submit_order(self, account, route, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
 
         if not self.verify_account(account):
           API_Callback(self, 0, 'submit-order', callback).complete({'status': 'Error', 'errorMsg': 'account unknown'})
           return
         #bank, branch, customer, deposit = self.current_account.split('.')[:4]
+        self.set_order_route(route, None)
+        if type(self.order_route) != dict:
+          API_Callback(self, 0, 'submit-order', callback).complete({'status': 'Error', 'errorMsg': 'undefined order route: %s' % repr(self.order_route)})
+          return
 
         o=OrderedDict({})
         bank, branch, customer, deposit = account.split('.')[:4]
@@ -1407,13 +1411,18 @@ class RTX(object):
 
     def set_order_route(self, route, callback):
         if type(route) == str or type(route) == unicode:
-            if route.startswith('{'):
+            if route.startswith('{') or route.startswith('"'):
+                print('setting route: %s' % repr(route))
                 route = json.loads(route)
             else:
                 route = {route: None}
-        self.order_route = route
-        if callback:
-            self.get_order_route(callback)
+        if (type(route)==dict) and (len(route.keys()) == 1) and (type(route.keys()[0]) in [str, unicode]):
+            self.order_route = route
+            if callback:
+                self.get_order_route(callback)
+        else:
+            if callback:
+                callback.errback(Failure(Exception('cannot set order route %s' % route)))
 
     def get_order_route(self, callback):
         API_Callback(self, 0, 'get_order_route', callback).complete(self.order_route)

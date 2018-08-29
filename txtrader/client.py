@@ -51,6 +51,7 @@ class API(object):
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
         self.account = self.config.get('API_ACCOUNT')
+        self.order_route = json.loads(self.config.get('API_ROUTE'))
         self.mode = self.config.get('MODE')
         self.get_retries = int(self.config.get('GET_RETRIES'))
         self.get_backoff_factor = float(self.config.get('GET_BACKOFF_FACTOR'))
@@ -215,23 +216,23 @@ class API(object):
 
     def market_order(self, *args):
         symbol, quantity = args[0:2]
-        return self.call_txtrader_post('market_order', {'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
+        return self.call_txtrader_post('market_order', {'account': self.account, 'route': self.order_route, 'symbol': symbol, 'quantity': int(quantity)})
 
     def stage_market_order(self, *args):
         tag, symbol, quantity = args[0:3]
-        return self.call_txtrader_post('stage_market_order', {'tag': tag, 'account': self.account, 'symbol': symbol, 'quantity': int(quantity)})
+        return self.call_txtrader_post('stage_market_order', {'tag': tag, 'account': self.account, 'route': self.order_route, 'symbol': symbol, 'quantity': int(quantity)})
 
     def limit_order(self, *args):
         symbol, limit_price, quantity = args[0:3]
-        return self.call_txtrader_post('limit_order', {'account': self.account, 'symbol': symbol, 'limit_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_post('limit_order', {'account': self.account, 'route': self.order_route, 'symbol': symbol, 'limit_price': float(limit_price), 'quantity': int(quantity)})
 
     def stop_order(self, *args):
         symbol, stop_price, quantity = args[0:3]
-        return self.call_txtrader_post('stop_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_post('stop_order', {'account': self.account, 'route': self.order_route, 'symbol': symbol, 'stop_price': float(limit_price), 'quantity': int(quantity)})
 
     def stoplimit_order(self, *args):
         symbol, stop_price, limit_price, quantity = args[0:4]
-        return self.call_txtrader_post('stoplimit_order', {'account': self.account, 'symbol': symbol, 'stop_price': float(limit_price), 'limit_price': float(limit_price), 'quantity': int(quantity)})
+        return self.call_txtrader_post('stoplimit_order', {'account': self.account, 'route': self.order_route, 'symbol': symbol, 'stop_price': float(limit_price), 'limit_price': float(limit_price), 'quantity': int(quantity)})
 
     def global_cancel(self, *args):
         return self.call_txtrader_post('global_cancel', {})
@@ -250,7 +251,10 @@ class API(object):
         return self.call_txtrader_get('get_order_route', {})
 
     def set_order_route(self, *args):
-        return self.call_txtrader_post('set_order_route', {'route': args[0]})
+        ret = self.call_txtrader_post('set_order_route', {'route': args[0]})
+        if ret:
+          self.order_route = ret
+        return ret
 
 if __name__=='__main__':
     from sys import argv
