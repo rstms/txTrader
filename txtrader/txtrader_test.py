@@ -19,6 +19,9 @@ import simplejson as json
 from pprint import pprint
 import pytest
 
+
+TEST_ALGO_ROUTE='{"TEST-ATM-ALGO":{"STRAT_ID":"BEST","BOOKING_TYPE":"3","STRAT_TIME_TAGS":"168;126","STRAT_PARAMETERS":{"99970":"2","99867":"N","847":"BEST","90057":"BEST","91000":"4.1.95"},"ORDER_FLAGS_3":"0","ORDER_CLONE_FLAG":"1","STRAT_TARGET":"ATDL","STRATEGY_NAME":"BEST","STRAT_REDUNDANT_DATA":{"UseStartTime":"false","UseEndTime":"false","cConditionalType":"{NULL}"},"STRAT_TIME_ZONE":"America/New_York","STRAT_TYPE":"COWEN_ATM_US_EQT","STRAT_STRING_40":"BEST","UTC_OFFSET":"-240"}}'
+
 testmode = 'RTX'
 
 from server_test import Server
@@ -128,11 +131,13 @@ def test_set_order_route(api):
     r0 = 'DEMO'
     r1 = {'DEMO':None} 
     r2 = {'DEMO': {'key1':'value1', 'key2':'value2'}}
-    for rin, rout in [ (r0, r1), (r1, r1), (r2, r2), (json.dumps(r0), r1), (json.dumps(r1), r1), (json.dumps(r2), r2) ]: 
+    r3 = TEST_ALGO_ROUTE
+    for rin, rout in [ (r0, r1), (r1, r1), (r2, r2), (json.dumps(r0), r1), (json.dumps(r1), r1), (json.dumps(r2), r2), (r3, json.loads(r3))]: 
         print('set_order_route(%s)' % repr(rin))
         assert api.set_order_route(rin) == rout
         assert api.get_order_route() == rout
     assert api.set_order_route(oldroute) == oldroute
+
 
 def test_partial_fill(api):
     print()
