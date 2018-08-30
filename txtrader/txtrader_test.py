@@ -120,14 +120,26 @@ def test_buy_sell(api):
     assert 'status' in o.keys()
     dump('market_order(IBM,100)', o)
 
-def test_partial_fill(api):
+def test_set_order_route(api):
     print()
     oldroute = api.get_order_route()
     assert type(oldroute) == dict
     assert oldroute.keys() == ['DEMOEUR']
+    r0 = 'DEMO'
+    r1 = {'DEMO':None} 
+    r2 = {'DEMO': {'key1':'value1', 'key2':'value2'}}
+    for rin, rout in [ (r0, r1), (r1, r1), (r2, r2), (json.dumps(r0), r1), (json.dumps(r1), r1), (json.dumps(r2), r2) ]: 
+        print('set_order_route(%s)' % repr(rin))
+        assert api.set_order_route(rin) == rout
+        assert api.get_order_route() == rout
+    assert api.set_order_route(oldroute) == oldroute
+
+def test_partial_fill(api):
+    print()
+    oldroute = api.get_order_route()
     assert api.set_order_route('DEMO')
     assert api.get_order_route() == {'DEMO': None}
-    quantity = 500
+    quantity = 1000
     symbol = 'COWN'
     print('buying %d %s' % (quantity, symbol))
     p = api.add_symbol(symbol)

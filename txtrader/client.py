@@ -51,7 +51,7 @@ class API(object):
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
         self.account = self.config.get('API_ACCOUNT')
-        self.order_route = json.loads(self.config.get('API_ROUTE'))
+        self.order_route = self.config.get('API_ROUTE')
         self.mode = self.config.get('MODE')
         self.get_retries = int(self.config.get('GET_RETRIES'))
         self.get_backoff_factor = float(self.config.get('GET_BACKOFF_FACTOR'))
@@ -104,6 +104,7 @@ class API(object):
             raise Exception('Error: unknown command: %s\n' % cmd)
 
     def call_txtrader_post(self, function_name, args):
+        #print('call_txtrader_post(%s, %s)' % (repr(function_name), repr(args)))
         url = '%s/%s' % (self.url, function_name)
         headers = {'Content-type': 'application/json'}
         r = requests.post(url, json=args, headers=headers,

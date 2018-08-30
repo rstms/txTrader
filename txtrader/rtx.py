@@ -692,7 +692,6 @@ class RTX(object):
         self.config = Config(self.channel)
         self.api_hostname = self.config.get('API_HOST')
         self.api_port = int(self.config.get('API_PORT'))
-        self.set_order_route(self.config.get('API_ROUTE'), None)
         self.username = self.config.get('USERNAME')
         self.password = self.config.get('PASSWORD')
         self.http_port = int(self.config.get('HTTP_PORT'))
@@ -750,6 +749,7 @@ class RTX(object):
         self.cx_time = None
         self.seconds_disconnected = 0
         self.callback_metrics = {}
+        self.set_order_route(self.config.get('API_ROUTE'), None)
         reactor.connectTCP(self.api_hostname, self.api_port, RtxClientFactory(self))
         self.repeater = LoopingCall(self.EverySecond)
         self.repeater.start(1)
@@ -1410,10 +1410,12 @@ class RTX(object):
         return self.connection_status
 
     def set_order_route(self, route, callback):
-        if type(route) == str or type(route) == unicode:
-            if route.startswith('{') or route.startswith('"'):
-                print('setting route: %s' % repr(route))
+        #print('set_order_route(%s, %s) type=%s %s' % (repr(route), repr(callback), type(route), (type(route) in [str, unicode])))
+        if type(route) in [str, unicode]:
+            if route.startswith('{'):
                 route = json.loads(route)
+	    elif route.startswith('"'):
+                route = {json.loads(route): None}
             else:
                 route = {route: None}
         if (type(route)==dict) and (len(route.keys()) == 1) and (type(route.keys()[0]) in [str, unicode]):
@@ -1423,6 +1425,8 @@ class RTX(object):
         else:
             if callback:
                 callback.errback(Failure(Exception('cannot set order route %s' % route)))
+            else:
+                self.error_handler(None, 'Cannot set order route %s' % repr(route))
 
     def get_order_route(self, callback):
         API_Callback(self, 0, 'get_order_route', callback).complete(self.order_route)

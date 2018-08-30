@@ -192,7 +192,7 @@ class webserver(object):
         Submit a market order, returning dict containing new order fields
         """
         account = str(args['account'])
-        route = str(args['route'])
+        route = args['route']
         symbol = str(args['symbol']).upper()
         quantity = int(args['quantity'])
         self.api.market_order(account, route, symbol, quantity, d)
@@ -203,7 +203,7 @@ class webserver(object):
         Submit a limit order, returning dict containing new order fields
         """
         account = str(args['account'])
-        route = str(args['route'])
+        route = args['route']
         symbol = str(args['symbol']).upper()
         price = float(args['limit_price'])
         quantity = int(args['quantity'])
@@ -215,7 +215,7 @@ class webserver(object):
         Submit a stop order, returning dict containing new order fields
         """
         account = str(args['account'])
-        route = str(args['route'])
+        route = args['route']
         symbol = str(args['symbol']).upper()
         price = float(args['stop_price'])
         quantity = int(args['quantity'])
@@ -227,7 +227,7 @@ class webserver(object):
         Submit a stop-limit order, returning dict containing new order fields
         """
         account = str(args['account'])
-        route = str(args['route'])
+        route = args['route']
         symbol = str(args['symbol']).upper()
         stop_price = float(args['stop_price'])
         limit_price = float(args['limit_price'])
@@ -297,9 +297,10 @@ class webserver(object):
         """
         account = str(args['account'])
         tag = str(args['tag'])
+        route = args['route']
         symbol = str(args['symbol']).upper()
         quantity = int(args['quantity'])
-        self.api.stage_market_order(tag, account, symbol, quantity, d)
+        self.api.stage_market_order(tag, account, route, symbol, quantity, d)
 
     def json_get_order_route(self, args, d):
         """get_order_route() => {'route_name', None | {parameter_name: parameter_value, ...}}
@@ -311,7 +312,7 @@ class webserver(object):
     def json_set_order_route(self, args, d):
         """set_order_route(route) => True if success, else False
 
-        Set order route data given route {'route_name': {parameter: value, ...}}
+        Set order route data given route {'route_name': {parameter: value, ...} (JSON string will be parsed into a route dict)}
         """
         route = args['route']
         self.api.set_order_route(route, d)
