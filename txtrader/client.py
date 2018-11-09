@@ -249,7 +249,8 @@ class API(object):
         return self.call_txtrader_post('set_primary_exchange', {'symbol': args[0], 'exchange': args[1]})
 
     def get_order_route(self, *args):
-        return self.call_txtrader_get('get_order_route', {})
+        # post locally configured order route to server and return it
+        return self.set_order_route(self.order_route)
 
     def set_order_route(self, *args):
         ret = self.call_txtrader_post('set_order_route', {'route': args[0]})

@@ -162,8 +162,8 @@ def test_partial_fill(api):
         #o={'status':'spoofed','TYPE':'spoofed'}
         #pprint(o)
         status = o['status']
-        filled = o['filled'] if 'filled' in o.keys() else None 
-        remaining = o['remaining'] if 'remaining' in o.keys() else None 
+        filled = o['filled'] if 'filled' in o.keys() else 0
+        remaining = o['remaining'] if 'remaining' in o.keys() else 0
         if (int(filled) > 0) and (int(remaining) > 0) and (int(filled) < quantity):
             partial_fills += 1    
         average_price = o['avgfillprice'] if 'avgfillprice' in o.keys() else None
