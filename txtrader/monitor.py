@@ -138,7 +138,7 @@ class StatusClientFactory(protocol.ClientFactory):
         if reactor.running:
             try: 
                 reactor.stop()
-            except twisted.internet.error.ReactorNotRunning:
+            except error.ReactorNotRunning:
 		pass
 
     def clientConnectionLost(self, connector, reason):
@@ -146,7 +146,7 @@ class StatusClientFactory(protocol.ClientFactory):
         if reactor.running:
             try:
                 reactor.stop()
-            except twisted.internet.error.ReactorNotRunning:
+            except error.ReactorNotRunning:
 		pass
 
 
