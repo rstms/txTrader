@@ -21,7 +21,7 @@ import pytest
 import subprocess
 
 test_mode = 'RTX'
-test_account = 'DEMO1.TEST.DEMO.2'
+test_account = 'CPS-DEMO.TEST.SANTE.2'
 
 QUERY_POSITION_ITERS=100
 QUERY_ACCOUNT_ITERS=10

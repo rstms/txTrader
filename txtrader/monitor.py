@@ -13,7 +13,7 @@
 
 
 import time
-from twisted.internet import reactor, protocol, task
+from twisted.internet import reactor, protocol, task, error
 from twisted.protocols.basic import NetstringReceiver
 
 class Monitor(object):
@@ -136,12 +136,18 @@ class StatusClientFactory(protocol.ClientFactory):
     def clientConnectionFailed(self, connector, reason):
         self.rx._callback('error', 'connection %s failed, reason=%s' % (connector, reason))
         if reactor.running:
-            reactor.stop()
+            try: 
+                reactor.stop()
+            except twisted.internet.error.ReactorNotRunning:
+		pass
 
     def clientConnectionLost(self, connector, reason):
         self.rx._callback('error', 'connection %s lost, reason=%s' % (connector, reason))
         if reactor.running:
-            reactor.stop()
+            try:
+                reactor.stop()
+            except twisted.internet.error.ReactorNotRunning:
+		pass
 
 
 if __name__ == '__main__':

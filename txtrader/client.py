@@ -44,6 +44,7 @@ def requests_retry_session(
 
 class API(object):
     def __init__(self, server):
+        #sys.stderr.write('txTrader.client.API.__init__(%s, %s)\n' % (repr(self), repr(server)))
         self.server = server
         self.config = Config(server)
         self.hostname = self.config.get('HOST')
