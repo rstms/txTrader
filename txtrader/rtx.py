@@ -104,6 +104,7 @@ class API_Symbol(object):
         self.last = 0.0
         self.size = 0
         self.volume = 0
+        self.open = 0.0
         self.close = 0.0
         self.vwap = 0.0
         self.high = 0.0
@@ -130,6 +131,7 @@ class API_Symbol(object):
             'last': self.last,
             'size': self.size,
             'volume': self.volume,
+            'open': self.open,
             'close': self.close,
             'vwap': self.vwap,
             'fullname': self.fullname
@@ -178,7 +180,7 @@ class API_Symbol(object):
                 self.rawdata[k]=''
         if self.api.symbol_init(self):
             self.cxn = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
-            fields = 'TRDPRC_1,TRDVOL_1,ACVOL_1'
+            fields = 'TRDPRC_1,TRDVOL_1,ACVOL_1,OPEN_PRC,HST_CLOSE,VWAP'
             if self.api.enable_ticker:
                 fields += ',BID,BIDSIZE,ASK,ASKSIZE'
             if self.api.enable_high_low:
@@ -225,6 +227,8 @@ class API_Symbol(object):
             quote_flag = True
         if 'COMPANY_NAME' in data.keys():
             self.fullname = self.api.parse_tql_str(data['COMPANY_NAME'], pid, 'COMPANY_NAME')
+        if 'OPEN_PRC' in data.keys():
+            self.open = self.api.parse_tql_float(data['OPEN_PRC'], pid, 'OPEN_PRC')
         if 'HST_CLOSE' in data.keys():
             self.close = self.api.parse_tql_float(data['HST_CLOSE'], pid, 'HST_CLOSE')
         if 'VWAP' in data.keys():
