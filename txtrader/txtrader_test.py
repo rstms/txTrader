@@ -19,6 +19,8 @@ import simplejson as json
 from pprint import pprint
 import pytest
 
+FILL_TIMEOUT = 30
+
 
 TEST_ALGO_ROUTE='{"TEST-ATM-ALGO":{"STRAT_ID":"BEST","BOOKING_TYPE":"3","STRAT_TIME_TAGS":"168;126","STRAT_PARAMETERS":{"99970":"2","99867":"N","847":"BEST","90057":"BEST","91000":"4.1.95"},"ORDER_FLAGS_3":"0","ORDER_CLONE_FLAG":"1","STRAT_TARGET":"ATDL","STRATEGY_NAME":"BEST","STRAT_REDUNDANT_DATA":{"UseStartTime":"false","UseEndTime":"false","cConditionalType":"{NULL}"},"STRAT_TIME_ZONE":"America/New_York","STRAT_TYPE":"COWEN_ATM_US_EQT","STRAT_STRING_40":"BEST","UTC_OFFSET":"-240"}}'
 
@@ -111,21 +113,23 @@ def test_buy_sell(api):
     #print('account=%s' % account)
     #api.set_account(account)
     print('buying IBM')
-    o = api.market_order('IBM', 100)
+    oid = _market_order(api, 'IBM', 100)
+    o = api.query_order(oid)
     assert o
     assert type(o) == dict
     assert 'permid' in o.keys()
+    oid = o['permid']
     assert 'status' in o.keys()
     dump('market_order(IBM,100)', o)
 
     print('selling IBM')
-
-    o = api.market_order('IBM', -100)
+    oid = _market_order(api, 'IBM', -100)
+    o = api.query_order(oid)
     assert o
     assert type(o) == dict
     assert 'permid' in o.keys()
     assert 'status' in o.keys()
-    dump('market_order(IBM,100)', o)
+    dump('market_order(IBM,-100)', o)
 
 def test_set_order_route(api):
     print()
@@ -141,7 +145,6 @@ def test_set_order_route(api):
         assert api.set_order_route(rin) == rout
         assert api.get_order_route() == rout
     assert api.set_order_route(oldroute) == oldroute
-
 
 def test_partial_fill(api):
     print()
@@ -171,7 +174,7 @@ def test_partial_fill(api):
         if (int(filled) > 0) and (int(remaining) > 0) and (int(filled) < quantity):
             partial_fills += 1    
         average_price = o['avgfillprice'] if 'avgfillprice' in o.keys() else None
-        print('status=%s filled=%s remaining=%s average_price=%s type=%s' % (status, filled, remaining, average_price, o['TYPE']))
+        print('status=%s filled=%s remaining=%s average_price=%s type=%s' % (status, filled, remaining, average_price, o['type']))
         assert not (status=='Filled' and filled < quantity)
         assert status in ['Submitted', 'Pending', 'Filled']
         time.sleep(1)
@@ -274,6 +277,7 @@ def _wait_for_fill(api, oid, return_on_error=False):
     print('Waiting for order %s to fill...' % oid)
     done = False
     last_status = ''
+    count = 0
     while not done:
         o = api.query_order(oid)
         if last_status != o['status']:
@@ -285,6 +289,8 @@ def _wait_for_fill(api, oid, return_on_error=False):
         if o['status'] == 'Filled':
             done = True
         else:
+            count += 1
+            assert count < FILL_TIMEOUT
             time.sleep(1)
 
 def _position(api, account):
@@ -370,11 +376,11 @@ def test_staged_trade_cancel(api):
     assert type(t)==dict
     assert 'status' in t.keys()
     assert t['status'] == 'Error'
-    assert 'REASON' in t.keys()
-    assert t['REASON'].lower().startswith('user cancel')
+    assert 'REASON' in t['raw']
+    assert t['raw']['REASON'].lower().startswith('user cancel')
     print('detected user cancel of %s' % oid)
 
-@pytest.mark.staged
+#@pytest.mark.staged
 def test_staged_trade_execute(api):
     trade_symbol = 'AAPL'
     trade_quantity = 10
@@ -385,6 +391,12 @@ def test_staged_trade_execute(api):
     oid = t['permid']
     status = t['status']
     print('Created staged order %s with status %s, waiting 5 seconds, then changing order to auto-execute' % (oid, status))
+
+    tickets = api.query_tickets()
+    assert oid in tickets.keys()
+    orders = api.query_orders()
+    assert not oid in orders.keys()
+
     time.sleep(5)
     status = api.query_order(oid)['status']
     print('cancelling order %s with status=%s...' % (oid, status))
@@ -420,6 +432,9 @@ def test_trade_and_query_orders(api):
     assert type(orders[oid]) == dict
     assert orders[oid]['permid'] == oid
     assert 'status' in orders[oid]
+    tickets = api.query_tickets()
+    assert tickets != None
+    assert not oid in tickets.keys()
 
 def test_query_executions(api):
     execs = api.query_executions()

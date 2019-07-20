@@ -245,13 +245,28 @@ class API_Symbol(object):
     #    self.rawdata = data
 
 class API_Order(object):
-    def __init__(self, api, oid, data, callback=None):
+    def __init__(self, api, oid, data, origin, callback=None):
+        #pprint({'new API_Order id=%s origin=%s' % (oid, origin): data})
         self.api = api
         self.oid = oid
-        self.fields = data
         self.callback = callback
         self.updates = []
         self.suborders = {}
+        self.fields = {}
+        self.identified = False
+        self.ticket = 'undefined'
+        data['status'] = 'Initialized'
+        data['origin'] = origin
+        self.update(data, init=True)
+
+    def identify_order_type(self, data):
+        if not self.identified:
+            if 'TYPE' in data:
+                otype = data['TYPE']
+                # set ticket flag based on first TYPE encountered
+                self.ticket = 'ticket' if otype.startswith('UserSubmitStaged') else 'order'
+                self.fields['type'] = otype
+                self.identified = True
 
     def initial_update(self, data):
         self.update(data)
@@ -259,9 +274,11 @@ class API_Order(object):
             self.callback.complete(self.render())
             self.callback = None
 
-    def update(self, data):
+    def update(self, data, init=False):
 
         field_state = json.dumps(self.fields)
+
+        self.identify_order_type(data)
     
         if 'ORDER_ID' in data:
             order_id = data['ORDER_ID']
@@ -274,9 +291,13 @@ class API_Order(object):
                 change = 'new'
             self.suborders[order_id] = data
         else:
-            self.api.error_handler(self.oid, 'Order Update without ORDER_ID: %s' % repr(data))
-            order_id = 'unknown'
-            change = 'error'
+            if init:
+                order_id = '(init)'
+                change = 'new'
+            else:
+                self.api.error_handler(self.oid, 'Order Update without ORDER_ID: %s' % repr(data))
+                order_id = 'unknown'
+                change = 'error'
 
         if self.api.log_order_updates:
             self.api.output('ORDER_UPDATE: OID=%s ORDER_ID=%s %s' % (self.oid, order_id, change))
@@ -294,13 +315,13 @@ class API_Order(object):
             if changes:
                 if self.api.log_order_updates:
                     self.api.output('ORDER_CHANGES: OID=%s ORDER_ID=%s %s' % (self.oid, order_id, repr(changes)))
-                if order_id != self.oid:
-                    update_type = changes['TYPE'] if 'TYPE' in changes else 'Undefined'
-                    self.updates.append({'id': order_id, 'type':  update_type, 'fields': changes, 'time': time.time() })
+                #if order_id != self.oid:
+                update_type = data['TYPE'] if 'TYPE' in data else 'Undefined'
+                self.updates.append({'id': order_id, 'type':  update_type, 'fields': changes, 'time': time.time() })
 
-        if json.dumps(self.fields) != field_state:
-            self.api.send_order_status(self)
-
+        if not init:
+            if json.dumps(self.fields) != field_state:
+                self.api.send_order_status(self)
 
     def update_fill_fields(self):
         if self.fields['TYPE'] in ['UserSubmitOrder', 'ExchangeTradeOrder']:
@@ -313,9 +334,13 @@ class API_Order(object):
 
     def render(self):
         # customize fields for standard txTrader order status 
-        self.fields['permid']=self.fields['ORIGINAL_ORDER_ID']
+        if 'ORIGINAL_ORDER_ID' in self.fields:
+            self.fields['permid']=self.fields['ORIGINAL_ORDER_ID']
         self.fields['symbol']=self.fields['DISP_NAME']
         self.fields['account']=self.api.make_account(self.fields)
+        self.fields['quantity']=self.fields['VOLUME']
+        self.fields['class'] = self.ticket
+
         status = self.fields.setdefault('CURRENT_STATUS', 'UNDEFINED')
         otype = self.fields.setdefault('TYPE', 'Undefined')
         #print('render: permid=%s ORDER_ID=%s CURRENT_STATUS=%s TYPE=%s' % (self.fields['permid'], self.fields['ORDER_ID'], status, otype))
@@ -355,8 +380,16 @@ class API_Order(object):
             self.fields['status'] = 'Error'
             
         self.fields['updates'] = self.updates
+        f = self.fields 
+        self.fields['abstract'] = '%s %d %s (%s)' % (f['BUYORSELL'], int(f['quantity']), f['symbol'], f['status'])
 
-        return self.fields
+        ret = {'raw':{}}
+        for k,v in self.fields.iteritems():
+            if k.islower():
+                ret[k]=v
+            else:
+                ret['raw'][k]=v
+        return ret
 
     def is_filled(self):
         return bool(self.fields['CURRENT_STATUS']=='COMPLETED' and
@@ -430,6 +463,8 @@ class API_Callback(object):
             results = self.format_positions(results)
         elif self.label == 'orders':
             results = self.format_orders(results)
+        elif self.label == 'tickets':
+            results = self.format_tickets(results)
         elif self.label=='executions':
             results = self.format_executions(results)
         elif self.label == 'order_status':
@@ -461,15 +496,25 @@ class API_Callback(object):
         return positions
 
     def format_orders(self, rows, oid=None):
+        return self._format_orders(rows, oid, 'order')
+
+    def format_tickets(self, rows, oid=None):
+        return self._format_orders(rows, oid, 'ticket')
+
+    def _format_orders(self, rows, oid, _filter):
+        #pprint({'format_orders': rows})
+        print('_format_orders %s %s' % (oid, _filter))
         for row in rows or []:
             if row:
                 self.api.handle_order_response(row)
         if oid:
-            results = self.api.orders[oid].render()
+            results = self.api.orders[oid].render() if oid in self.api.orders else None
         else:
             results={}
             for k,v in self.api.orders.items():
-                results[k] = v.render()
+                # don't return staged order tickets
+                if v.ticket == _filter:
+                    results[k] = v.render()
         return results
 
     def format_executions(self, rows):
@@ -949,7 +994,7 @@ class RTX(object):
                 self.orders[oid].update(msg)
             else:
                 # we've never seen this order, so add it to the collection and update it
-                o = API_Order(self, oid, {})
+                o = API_Order(self, oid, msg, 'realtick')
                 self.orders[oid]=o
                 o.update(msg)
         else:
@@ -968,7 +1013,7 @@ class RTX(object):
 
     def send_order_status(self, order):
         fields = order.render()
-        self.WriteAllClients('order.%s %s %s %s' % (fields['permid'], fields['account'], fields['TYPE'], fields['status']))
+        self.WriteAllClients('%s.%s %s %s %s' % (order.ticket, fields['permid'], fields['account'], fields['raw']['TYPE'], fields['status']))
 
     def make_account(self, row):
         return '%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'])
@@ -1165,7 +1210,7 @@ class RTX(object):
         # create callback to return to client after initial order update
         cb = API_Callback(self, tid, 'ticket', callback, self.callback_timeout['ORDER'])
         self.ticket_callbacks.append(cb)
-        self.pending_tickets[tid]=API_Order(self, tid, o, cb)
+        self.pending_tickets[tid]=API_Order(self, tid, o, 'client', cb)
         fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
 
         acb = API_Callback(self, tid, 'ticket-ack', RTX_LocalCallback(self, self.ticket_submit_ack_callback), self.callback_timeout['ORDER'])
@@ -1199,6 +1244,7 @@ class RTX(object):
         o['DEPOSIT']=deposit
 
         o['BUYORSELL']='Buy' if quantity > 0 else 'Sell' # Buy Sell SellShort
+        o['quantity'] = quantity
         o['GOOD_UNTIL']='DAY' # DAY or YYMMDDHHMMSS
         route = self.order_route.keys()[0]
         o['EXIT_VEHICLE']=route
@@ -1254,7 +1300,7 @@ class RTX(object):
             o['CLIENT_ORDER_ID']=oid
             submission = 'Order'
             
-        o['TYPE']='UserSubmit%s%s' % (staging, submission)
+        o['TYPE'] = 'UserSubmit%s%s' % (staging, submission)
 
         # create callback to return to client after initial order update
         cb = API_Callback(self, oid, 'order', callback, self.callback_timeout['ORDER'])
@@ -1263,9 +1309,9 @@ class RTX(object):
             self.pending_orders[oid]=self.orders[oid]
             self.orders[oid].callback = cb
         else:
-            self.pending_orders[oid]=API_Order(self, oid, o, cb)
+            self.pending_orders[oid]=API_Order(self, oid, o, 'client', cb)
 
-        fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems()])
+        fields= ','.join(['%s=%s' %(i,v) for i,v in o.iteritems() if i[0].isupper()])
 
         acb = API_Callback(self, oid, 'order-ack', RTX_LocalCallback(self, self.order_submit_ack_callback), self.callback_timeout['ORDER'])
         cb = API_Callback(self, oid, 'order', RTX_LocalCallback(self, self.order_submit_callback), self.callback_timeout['ORDER'])
@@ -1352,9 +1398,15 @@ class RTX(object):
         cxn.request('POSITION', '*', '', cb)
         self.position_callbacks.append(cb)
 
+    def request_tickets(self, callback):
+        self._request_orders(callback, 'tickets')
+
     def request_orders(self, callback):
+        self._request_orders(callback, 'orders')
+
+    def _request_orders(self, callback, label):
         cxn = self.cxn_get('ACCOUNT_GATEWAY', 'ORDER')
-        cb = API_Callback(self, 0, 'orders', callback, self.callback_timeout['ORDERSTATUS'])
+        cb = API_Callback(self, 0, label, callback, self.callback_timeout['ORDERSTATUS'])
         cxn.request('ORDERS', '*', '', cb)
         self.openorder_callbacks.append(cb)
 

@@ -167,7 +167,7 @@ class webserver(object):
     def json_query_order(self, args, d):
         """query_order('id') => {'fieldname': data, ...}
 
-        Return dict containing order status fields for given order id
+        Return dict containing order/ticket status fields for given order id
         """
         oid = str(args['id'])
         self.api.request_order(oid, d)
@@ -178,6 +178,13 @@ class webserver(object):
         Return dict keyed by order id containing dicts of order data fields
         """
         self.api.request_orders(d)
+
+    def json_query_tickets(self, args, d):
+        """query_tickets() => {'order_id': {'field': data, ...}, ...}
+
+        Return dict keyed by order id containing dicts of staged order ticket data fields
+        """
+        self.api.request_tickets(d)
 
     def json_query_executions(self, args, d):
         """query_executions() => {'exec_id': {'field': data, ...}, ...}

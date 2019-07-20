@@ -79,6 +79,7 @@ class API(object):
             'query_account': (self.query_account, True, ('account', 'fields')),
             'query_positions': (self.query_positions, True, ()),
             'query_orders': (self.query_orders, True, ()),
+            'query_tickets': (self.query_tickets, True, ()),
             'query_order': (self.query_order, True, ('order_id',)),
             'cancel_order': (self.cancel_order, True, ('order_id',)),
             'query_executions': (self.query_executions, True, ()),
@@ -203,6 +204,9 @@ class API(object):
 
     def query_orders(self, *args):
         return self.call_txtrader_get('query_orders', {})
+
+    def query_tickets(self, *args):
+        return self.call_txtrader_get('query_tickets', {})
 
     def query_order(self, *args):
         return self.call_txtrader_get('query_order', {'id': args[0]})

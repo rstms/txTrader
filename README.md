@@ -214,8 +214,8 @@ uptime() => 'uptime string'
         
 ```
 
-Environment Varialbles
-----------------------
+Environment Variables
+---------------------
 
 The default values for these configuration variables are copied from `etc/txtrader` to `/etc/txtrader` at installation.  They are
 loaded into the environment with `envdir` by the service run script.
