@@ -381,7 +381,7 @@ class API_Order(object):
             
         self.fields['updates'] = self.updates
         f = self.fields 
-        self.fields['abstract'] = '%s %d %s (%s)' % (f['BUYORSELL'], int(f['quantity']), f['symbol'], f['status'])
+        self.fields['text'] = '%s %d %s (%s)' % (f['BUYORSELL'], int(f['quantity']), f['symbol'], f['status'])
 
         ret = {'raw':{}}
         for k,v in self.fields.iteritems():
