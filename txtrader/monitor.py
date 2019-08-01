@@ -107,6 +107,7 @@ class StatusClient(NetstringReceiver):
                     '%s.time: ' % self.channel: 'time',
                     '%s.error:' % self.channel: 'error',
                     '%s.order.' % self.channel: 'order',
+                    '%s.ticket.' % self.channel: 'ticket',
                     '%s.open-order.' % self.channel: 'order',
                     '%s.execution.' % self.channel: 'execution',
                     '%s.quote.' % self.channel: 'quote',

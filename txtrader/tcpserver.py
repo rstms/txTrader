@@ -41,6 +41,7 @@ class tcpserver(basic.NetstringReceiver):
             'symbols': self.cmd_symbols,
             'positions': self.cmd_positions,
             'orders': self.cmd_orders,
+            'tickets': self.cmd_tickets,
             'executions': self.cmd_executions,
             'globalcancel': self.cmd_globalcancel,
             'cancel': self.cmd_cancel,
@@ -150,6 +151,9 @@ class tcpserver(basic.NetstringReceiver):
 
     def cmd_orders(self, line):
         self.factory.api.request_orders(self.sendString)
+
+    def cmd_tickets(self, line):
+        self.factory.api.request_tickets(self.sendString)
 
     def cmd_executions(self, line):
         self.factory.api.request_executions(self.sendString)

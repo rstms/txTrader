@@ -360,7 +360,7 @@ class API_Order(object):
                 self.update_fill_fields()
             elif otype == 'UserSubmitCancel':
                 self.fields['status'] = 'Cancelled'
-            elif otype == 'UserSubmitChange':
+            elif otype in ['UserSubmitChange', 'AdjustQty']:
                 self.fields['status'] = 'Changed'
             elif otype == 'ExchangeAcceptOrder':
                 self.fields['status'] = 'Accepted'
