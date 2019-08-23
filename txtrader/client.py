@@ -71,6 +71,7 @@ class API(object):
             'del_symbol': (self.del_symbol, True, ('symbol',)),
             'query_symbol': (self.query_symbol, True, ('symbol',)),
             'query_symbol_data': (self.query_symbol_data, True, ('symbol',)),
+            'query_symbol_bars': (self.query_symbol_bars, True, ('symbol',)),
             'query_symbols': (self.query_symbols, True, ()),
             'set_account': (self.set_account, False, ('account',)),
             'set_order_route': (self.set_order_route, True, ('route',)),
@@ -175,6 +176,9 @@ class API(object):
 
     def query_symbol_data(self, *args):
         return self.call_txtrader_get('query_symbol_data', {'symbol': args[0]})
+
+    def query_symbol_bars(self, *args):
+        return self.call_txtrader_get('query_symbol_bars', {'symbol': args[0]})
 
     def query_accounts(self, *args):
         return self.call_txtrader_get('query_accounts', {})

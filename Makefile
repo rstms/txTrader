@@ -76,6 +76,13 @@ testconfig:
 	  sudo sh -c "echo $$ACCOUNT>$(ENVDIR)/TXTRADER_API_ACCOUNT";\
 	fi;
 
+cleanup:
+	@if ps ax | egrep [d]efunct; then \
+	  sudo pkill supervise;\
+	  sudo pkill multilog;\
+	  sudo kill $$(ps fax | awk '/[s]sh -v/{print $$1}');\
+	fi
+
 venv:	.make-venv
 
 .make-venv:

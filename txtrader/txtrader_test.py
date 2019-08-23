@@ -18,6 +18,7 @@ import time
 import simplejson as json
 from pprint import pprint
 import pytest
+import re
 
 FILL_TIMEOUT = 30
 
@@ -72,7 +73,7 @@ def test_stock_prices(api):
       assert key in p.keys()
       assert type(p[key]) == _type
       if required:
-        assert p[key]
+        assert not p[key] == None
 
     r = api.query_symbol_data('IBM')
     assert r
@@ -548,25 +549,30 @@ def test_trade_submission_error_bad_quantity(api):
 #        """stoplimit_order('symbol', stop_price, limit_price, quantity) => {'field':, data, ...} 
 
 @pytest.mark.bars
-def dont_test_bars(api): 
+def test_bars(api): 
     sbar = '2017-07-06 09:30:00' 
     ebar = '2017-07-06 09:40:00' 
     ret = api.query_bars('SPY', 1, sbar, ebar) 
     assert ret 
-    assert type(ret) == list 
-    assert ret[0]=='OK' 
-    bars = ret[1] 
+    assert type(ret) == dict 
+    assert 'symbol' in ret.keys()
+    assert 'bars' in ret.keys()
+    bars = ret['bars'] 
     assert bars 
     assert type(bars) == list 
     for bar in bars:
-        assert type(bar) == dict
-        assert 'date' in bar
-        assert 'open' in bar
-        assert 'high' in bar
-        assert 'low' in bar
-        assert 'close' in bar
-        assert 'volume' in bar
-        #print('%s %s %s %s %s %s' % (bar['date'], bar['open'], bar['high'], bar['low'], bar['close'], bar['volume']))
+        assert type(bar) == list  
+        b_date, b_time, b_open, b_high, b_low, b_close, b_volume = bar
+        assert type(b_date) in (str, unicode) 
+        assert re.match('^\d\d\d\d-\d\d-\d\d$', b_date) 
+        assert type(b_time) in (str, unicode)
+        assert re.match('^\d\d:\d\d:\d\d$', b_time) 
+        assert type(b_open) == float
+        assert type(b_high) == float
+        assert type(b_low) == float
+        assert type(b_close) == float
+        assert type(b_volume) == int 
+        print('%s %s %.2f %.2f %.2f %.2f %d' % (b_date, b_time, b_open, b_high, b_low, b_close, b_volume))
 
 def test_cancel_order(api):
     ret = api.cancel_order('000')

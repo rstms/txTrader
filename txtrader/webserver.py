@@ -129,6 +129,19 @@ class webserver(object):
             ret = self.api.symbols[symbol].rawdata
         self.render(d, ret)
 
+    def json_query_symbol_bars(self, args, d):
+        """query_symbol_bars('symbol') => [[barchart data], ...]
+
+        Return array of current live bar data for given symbol
+        """
+        symbol = str(args['symbol']).upper()
+        ret = None
+        if symbol in self.api.symbols.keys():
+            api_symbol = self.api.symbols[symbol]
+            if api_symbol.barchart:
+                ret = api_symbol.barchart['bars']
+        self.render(d, ret)
+
     def json_query_accounts(self, args, d):
         """query_accounts() => ['account_name', ...]
 
@@ -248,7 +261,7 @@ class webserver(object):
         Return array containing status strings and lists of bar data if successful
         """
         symbol = str(args['symbol']).upper()
-        period = int(args['period'])
+        period = str(args['period']).upper()
         start = str(args['start'])
         end = str(args['end'])
         self.api.query_bars(symbol, period, start, end, d)

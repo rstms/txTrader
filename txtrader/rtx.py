@@ -26,7 +26,7 @@ from txtrader.config import Config
 
 CALLBACK_METRIC_HISTORY_LIMIT = 1024
 
-TIMEOUT_TYPES = ['DEFAULT', 'ACCOUNT', 'ADDSYMBOL', 'ORDER', 'ORDERSTATUS', 'POSITION', 'TIMER']
+TIMEOUT_TYPES = ['DEFAULT', 'ACCOUNT', 'ADDSYMBOL', 'ORDER', 'ORDERSTATUS', 'POSITION', 'TIMER', 'BARCHART']
 
 # default RealTick orders to NYSE and Stock type
 RTX_EXCHANGE='NYS'
@@ -38,6 +38,9 @@ ENABLE_CXN_DEBUG = False
 
 DISCONNECT_SECONDS = 30 
 SHUTDOWN_ON_DISCONNECT = True 
+
+BARCHART_FIELDS = 'DISP_NAME,TRD_DATE,TRDTIM_1,OPEN_PRC,HIGH_1,LOW_1,SETTLE,ACVOL_1'
+BARCHART_TOPIC = 'LIVEQUOTE'
 
 from twisted.python import log
 from twisted.python.failure import Failure
@@ -109,15 +112,29 @@ class API_Symbol(object):
         self.vwap = 0.0
         self.high = 0.0
         self.low = 0.0
+        self.minute_high = 0.0
+        self.minute_low = 0.0
+        self.last_trade_minute = -1
+        self.last_api_minute = -1
+
         self.rawdata = ''
         self.api.symbols[symbol] = self
         self.last_quote = ''
         self.output('API_Symbol %s %s created for client %s' %
                     (self, symbol, client_id))
         self.output('Adding %s to watchlist' % self.symbol)
+        # request initial symbol data
         self.cxn = api.cxn_get('TA_SRV', 'LIVEQUOTE')
         cb = API_Callback(self.api, self.cxn.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), self.api.callback_timeout['ADDSYMBOL'])
         self.cxn.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
+
+        # initialize barchart 
+        self.barchart = None
+        # request initial barchart data
+        if self.api.enable_barchart:
+            self.cxn = api.cxn_get('TA_SRV', BARCHART_TOPIC)
+            cb = API_Callback(self.api, self.cxn.id, 'init_symbol', RTX_LocalCallback(self.api, self.barchart_request_handler), self.api.callback_timeout['ADDSYMBOL'])
+            self.cxn.request('INTRADAY', BARCHART_FIELDS, "DISP_NAME='%s',BARINTERVAL=1" % symbol, cb)
 
     def __str__(self):
         return 'API_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s vwap=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.vwap, self.clients)
@@ -125,7 +142,15 @@ class API_Symbol(object):
     def __repr__(self):
         return str(self)
 
+    def reset_minute_calculated_fields(self):
+        print('### reset_minute_calculated_fields %s last_trade_minute=%d last_api_minute=%d' % (self.symbol, self.last_trade_minute, self.last_api_minute))
+        self.minute_high = self.last
+        self.minute_low = self.last
+
     def export(self):
+        # ensure reset of intra-minute price fields if API time has rolled since last trade update 
+        if self.api.trade_minute != self.last_api_minute:
+            self.reset_minute_calculated_fields()
         ret = {
             'symbol': self.symbol,
             'last': self.last,
@@ -139,6 +164,8 @@ class API_Symbol(object):
         if self.api.enable_high_low: 
           ret['high'] = self.high
           ret['low'] = self.low
+          ret['minute_high'] = self.minute_high
+          ret['minute_low'] = self.minute_low
         if self.api.enable_ticker:
           ret['bid'] = self.bid
           ret['bidsize'] = self.bid_size
@@ -176,17 +203,21 @@ class API_Symbol(object):
         self.parse_fields(None, data[0])
         self.rawdata = data[0]
         for k,v in self.rawdata.items():
-            if v.startswith('Error '):
+            if str(v).startswith('Error '):
                 self.rawdata[k]=''
-        if self.api.symbol_init(self):
-            self.cxn = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
-            fields = 'TRDPRC_1,TRDVOL_1,ACVOL_1,OPEN_PRC,HST_CLOSE,VWAP'
-            if self.api.enable_ticker:
-                fields += ',BID,BIDSIZE,ASK,ASKSIZE'
-            if self.api.enable_high_low:
-                fields += ',HIGH_1,LOW_1'
-            self.cxn.advise('LIVEQUOTE', fields, "DISP_NAME='%s'" % self.symbol, self.parse_fields)
 
+        if self.api.symbol_init(self):
+            self.init_price_advise()
+
+    def init_price_advise(self):
+        self.cxn = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
+        fields = 'TRDTIM_1,TRDPRC_1,TRDVOL_1,ACVOL_1,OPEN_PRC,HST_CLOSE,VWAP'
+        if self.api.enable_ticker:
+            fields += ',BID,BIDSIZE,ASK,ASKSIZE'
+        if self.api.enable_high_low:
+            fields += ',HIGH_1,LOW_1'
+        self.cxn.advise('LIVEQUOTE', fields, "DISP_NAME='%s'" % self.symbol, self.parse_fields)
+        
     def parse_fields(self, cxn, data):
         trade_flag = False
         quote_flag = False
@@ -199,6 +230,21 @@ class API_Symbol(object):
         if 'TRDPRC_1' in data.keys():
             self.last = self.api.parse_tql_float(data['TRDPRC_1'], pid, 'TRDPRC_1')
             trade_flag = True
+            if 'TRDTIM_1' in data.keys():
+                minute = int(self.api.parse_tql_time(data['TRDTIM_1'], pid, 'TRDTIM_1')/60)
+                # reset intra-minute high and low when minute rolls over
+                if self.last_trade_minute != minute:
+                    print('### trade minute rollover detected: %d' % minute)
+                    self.last_trade_minute = minute
+                    self.last_api_minute = self.api.trade_minute
+                    self.reset_minute_calculated_fields()
+            else:
+                self.api.error_handler(repr(self), 'ERROR: TRDPRC_1 without TRDTIM_1')
+
+            # calculate intra-minute high and low
+            self.minute_high = max(self.minute_high, self.last)
+            self.minute_low = min(self.minute_low, self.last)        
+
         if 'HIGH_1' in data.keys():
             self.high = self.api.parse_tql_float(data['HIGH_1'], pid, 'HIGH_1')
             trade_flag = True
@@ -240,9 +286,24 @@ class API_Symbol(object):
             if trade_flag:
                 self.update_trade()
 
-    #def update_handler(self, data):
-    #    self.output('API_Symbol update: %s' % data)
-    #    self.rawdata = data
+    def barchart_request_handler(self, data):
+        data = json.loads(data)
+        #pprint({'barchart_request_handler': data})
+        # parse the REQUEST barchart
+        self.barchart_parse(data)
+
+        # configure ADVISE for live updates of 1-minute barchart data
+        self.cxn_bars = self.api.cxn_get('TA_SRV', BARCHART_TOPIC)
+        where = "DISP_NAME='%s',BARINTERVAL=1" % self.symbol
+        self.cxn_bars.advise('INTRADAY', BARCHART_FIELDS, where, self.barchart_advise_handler)
+
+    def barchart_advise_handler(self, cxn, data):
+        data = json.loads(data)
+        #pprint({'barchart_advise_handler': data})
+        self.barchart_parse(data)
+
+    def barchart_parse(self, data):
+        self.barchart = self.api.format_barchart(data)
 
 class API_Order(object):
     def __init__(self, api, oid, data, origin, callback=None):
@@ -455,6 +516,8 @@ class API_Callback(object):
                 self.expired = True
                 self.done = True
 
+    # TODO: all of these format_* really belong in the api class
+
     def format_results(self, results):
         #print('format_results: label=%s results=%s' % (self.label, results))
         if self.label == 'account_data':
@@ -469,6 +532,8 @@ class API_Callback(object):
             results = self.format_executions(results)
         elif self.label == 'order_status':
             results = self.format_orders(results, self.id)
+        elif self.label == 'barchart':
+            results = self.api.format_barchart(results)
 
         return json.dumps(results)
 
@@ -527,6 +592,7 @@ class API_Callback(object):
                 results[k]=v.fields
                 results[k]['updates']=v.updates
         return results
+
 
 class RTX_Connection(object):
     def __init__(self, api, service, topic, enable_logging=False):
@@ -747,6 +813,7 @@ class RTX(object):
         self.tcp_port = int(self.config.get('TCP_PORT'))
         self.enable_ticker = bool(int(self.config.get('ENABLE_TICKER')))
         self.enable_high_low= bool(int(self.config.get('ENABLE_HIGH_LOW')))
+        self.enable_barchart = bool(int(self.config.get('ENABLE_BARCHART')))
         self.enable_seconds_tick = bool(int(self.config.get('ENABLE_SECONDS_TICK')))
         self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
         self.debug_api_messages = bool(int(self.config.get('DEBUG_API_MESSAGES')))
@@ -757,6 +824,7 @@ class RTX(object):
             self.callback_timeout[t] = int(self.config.get('TIMEOUT_%s' % t))
             self.output('callback_timeout[%s] = %d' % (t, self.callback_timeout[t]))
         self.now = None
+        self.trade_minute = -1
         self.feedzone = pytz.timezone(self.config.get('API_TIMEZONE'))
         self.localzone = tzlocal.get_localzone()
         self.current_account = ''
@@ -862,7 +930,6 @@ class RTX(object):
             self.output('<-- %s' % repr(msg))
         if self.gateway_sender:
             self.gateway_sender('%s\n' % str(msg))
-
 
     def dump_input_message(self, msg):
         self.output('--RX[%d]-->' % (len(msg)))
@@ -1120,8 +1187,15 @@ class RTX(object):
         ret = self.parse_tql_field(data, pid, label)
         return str(ret) if ret else ''
 
+    def parse_tql_time(self, data, pid, label):
+        """Parse TQL ascii time field returning as number of seconds since midnight"""
+        field = self.parse_tql_field(data, pid, label)
+        hour, minute, second = [int(i) for i in field.split(':')[0:3]]
+        ret = hour * 3600 + minute * 60 + second
+        return int(ret) if ret else 0
+
     def parse_tql_field(self, data, pid, label):
-        if data.lower().startswith('error '):
+        if str(data).lower().startswith('error '):
             if data.lower()=='error 0':
                 code = 'Field Not Found'
             elif data.lower() == 'error 2':
@@ -1149,12 +1223,14 @@ class RTX(object):
                 # this indicates the $TIME symbol is not found on the server, which is a kludge to determine the login has failed
                 self.force_disconnect('Gateway reports $TIME symbol unknown; connection has failed')
             
-            elif time_field.lower().startswith('error'):
+            elif str(time_field).lower().startswith('error'):
                 self.error_handler(self.id, 'handle_time: time field %s' % time_field)
             else:
                 year, month, day = [int(i) for i in date_field.split('-')[0:3]]
                 hour, minute, second = [int(i) for i in time_field.split(':')[0:3]]
                 self.now = self.feedzone.localize(datetime.datetime(year,month,day,hour,minute,second)).astimezone(self.localzone)
+                self.trade_minute = self.now.hour * 60 + self.now.minute
+                print('### api.trade_minute=%d api.now=%s' % (self.trade_minute, self.now))
                 if minute != self.last_minute:
                     self.last_minute = minute
                     self.WriteAllClients('time: %s %s:00' % (self.now.strftime('%Y-%m-%d'), self.now.strftime('%H:%M')))
@@ -1447,20 +1523,78 @@ class RTX(object):
         data = json.loads(data)
         self.output('global cancel: %s' % repr(data))
 
-    def query_bars(self, symbol, period, bar_start, bar_end, callback):
-        self.error_handler(self.id, 'ALERT: query_bars unimplemented')
-        return None
+    def query_bars(self, symbol, interval, bar_start, bar_end, callback):
 
-    def handle_historical_data(self, msg):
-        for cb in self.bardata_callbacks:
-            if cb.id == msg.reqId:
-                if not cb.data:
-                    cb.data = []
-                if msg.date.startswith('finished'):
-                    cb.complete(['OK', cb.data])
-                else:
-                    cb.data.append(dict(msg.items()))
-        # self.output('historical_data: %s' % msg) #repr((id, start_date, bar_open, bar_high, bar_low, bar_close, bar_volume, count, WAP, hasGaps)))
+        if not self.enable_barchart:
+            # return with error if barchart function is disabled
+            self.error_handler(self.id, 'ALERT: query_bars unimplemented')
+            API_Callback(self, 0, 'query-bars-disabled', callback).complete({'error': 'barchart data is disabled'})
+            return
+
+        # intraday n-minute bars; given stop date, number of days, minutes_per_bar
+        if str(interval).startswith('D'):
+            table = 'DAILY'
+            interval = 0
+        elif str(interval).startswith('W'):
+            table = 'DAILY'
+            interval = 1
+        elif str(interval).startswith('M'):
+            table = 'DAILY'
+            interval = 2
+        else:
+            table = 'INTRADAY'
+            interval = int(interval)
+
+        # implement defaults for bar_start, bar_end
+
+        if str(bar_start).startswith('-'):
+            bar_start = (self.now + datetime.timedelta(minutes=int(bar_start))).isoformat(' ')[:19]
+            bar_end = self.now.isoformat(' ')[:19]
+            print('offset bar start: start=%s end=%s' % (repr(bar_start), repr(bar_end)))
+
+        if not bar_start:
+            bar_start = self.now.date().isoformat()
+
+        if not bar_end:
+            bar_end = bar_start[:10]
+
+        if len(bar_start) < 19:
+            bar_start += ' 00:00:00'
+
+        if len(bar_end) < 19:
+            bar_end += ' 23:59:00'
+
+        bar_start = datetime.datetime.strptime(bar_start, '%Y-%m-%d %H:%M:%S')
+        bar_end = datetime.datetime.strptime(bar_end, '%Y-%m-%d %H:%M:%S')
+
+        where = "DISP_NAME='%s'," % symbol
+        where += "BARINTERVAL=%d," % interval
+        where += "DAYS_BACK=%d," % ((bar_end - bar_start).days + 1)
+        where += "STARTDATE='%s'," % bar_start.strftime('%Y/%m/%d')
+        where += "CHART_STARTTIME='%s'," % bar_start.strftime('%H:%M')
+        where += "STOPDATE='%s'," % bar_end.strftime('%Y/%m/%d')
+        where += "CHART_STOPTIME='%s'" % bar_end.strftime('%H:%M')
+
+        cb = API_Callback(self, '%s;%s' % (table, where), 'barchart', callback, self.callback_timeout['BARCHART'])
+        self.cxn_get('TA_SRV', BARCHART_TOPIC).request(table, BARCHART_FIELDS, where, cb)
+        self.bardata_callbacks.append(cb)
+
+    def format_barchart(self, rows):
+        if type(rows) == list and len(rows)==1:
+            row = rows[0]
+            results = {'symbol':  row['DISP_NAME'], 'query': self.id, 'bars': []}
+            if 'TRD_DATE' in row and type(row['TRD_DATE'])==list:
+                for i in range(len(row['TRD_DATE'])):
+                    results['bars'].append([row['TRD_DATE'][i]]) 
+            if 'TRDTIM_1' in row and type(row['TRDTIM_1'])==list:
+                for i in range(len(row['TRDTIM_1'])):
+                    results['bars'][i].append(row['TRDTIM_1'][i]) 
+            for i in range(len(results['bars'])):
+                bar = [row['OPEN_PRC'][i], row['HIGH_1'][i], row['LOW_1'][i], row['SETTLE'][i], row['ACVOL_1'][i]]
+                results['bars'][i].extend(bar)
+        else:
+            results = {'error': 'no bar data returned'}
+        return results
 
     def query_connection_status(self):
         return self.connection_status
