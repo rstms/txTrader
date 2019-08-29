@@ -224,6 +224,33 @@ def test_symbol_price(api):
     assert type(p) == dict
     assert p['symbol'] == 'AAPL'
 
+def _verify_barchart_enabled(api):
+    v = api.version()
+    assert v
+    assert type(v)==dict
+    assert type(v['flags'])==dict
+    assert 'BARCHART' in v['flags']
+    return v['flags']['BARCHART']==True
+
+def test_symbol_bars(api):
+    if 'TSLA' in api.query_symbols():
+        assert api.del_symbol('TSLA')
+    assert api.add_symbol('TSLA')
+    assert 'TSLA' in api.query_symbols()
+    bars = api.query_symbol_bars('TSLA')
+    assert type(bars) == list
+    if _verify_barchart_enabled(api):
+        assert type(bars[0]) == list
+        for bar in bars:
+           print('%s' % repr(bar))
+           for i in range(len(bar)):
+               assert type(bar[i]) in [[str, unicode], [str,unicode], [float], [float], [float], [float], [int]][i]
+               assert re.match('^\d\d\d\d-\d\d-\d\d$', bar[0]) 
+               assert re.match('^\d\d:\d\d:\d\d$', bar[1]) 
+    else:
+        print('barchart disabled')
+        assert bars == []
+
 def test_query_accounts(api):
     test_account = api.account
 
@@ -564,24 +591,29 @@ def test_bars(api):
     ret = api.query_bars('SPY', 1, sbar, ebar) 
     assert ret 
     assert type(ret) == dict 
-    assert 'symbol' in ret.keys()
-    assert 'bars' in ret.keys()
-    bars = ret['bars'] 
-    assert bars 
-    assert type(bars) == list 
-    for bar in bars:
-        assert type(bar) == list  
-        b_date, b_time, b_open, b_high, b_low, b_close, b_volume = bar
-        assert type(b_date) in (str, unicode) 
-        assert re.match('^\d\d\d\d-\d\d-\d\d$', b_date) 
-        assert type(b_time) in (str, unicode)
-        assert re.match('^\d\d:\d\d:\d\d$', b_time) 
-        assert type(b_open) == float
-        assert type(b_high) == float
-        assert type(b_low) == float
-        assert type(b_close) == float
-        assert type(b_volume) == int 
-        print('%s %s %.2f %.2f %.2f %.2f %d' % (b_date, b_time, b_open, b_high, b_low, b_close, b_volume))
+    if _verify_barchart_enabled(api):
+        assert not 'error' in ret
+        assert 'symbol' in ret.keys()
+        assert 'bars' in ret.keys()
+        bars = ret['bars'] 
+        assert bars 
+        assert type(bars) == list 
+        for bar in bars:
+            assert type(bar) == list  
+            b_date, b_time, b_open, b_high, b_low, b_close, b_volume = bar
+            assert type(b_date) in (str, unicode) 
+            assert re.match('^\d\d\d\d-\d\d-\d\d$', b_date) 
+            assert type(b_time) in (str, unicode)
+            assert re.match('^\d\d:\d\d:\d\d$', b_time) 
+            assert type(b_open) == float
+            assert type(b_high) == float
+            assert type(b_low) == float
+            assert type(b_close) == float
+            assert type(b_volume) == int 
+            print('%s %s %.2f %.2f %.2f %.2f %d' % (b_date, b_time, b_open, b_high, b_low, b_close, b_volume))
+    else:
+        assert 'error' in ret
+        print('%s' % repr(ret))
 
 def test_cancel_order(api):
     ret = api.cancel_order('000')

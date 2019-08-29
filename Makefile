@@ -82,6 +82,7 @@ cleanup:
 	  sudo pkill multilog;\
 	  sudo kill $$(ps fax | awk '/[s]sh -v/{print $$1}');\
 	fi
+	sleep 3
 
 venv:	.make-venv
 

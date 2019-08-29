@@ -19,7 +19,7 @@ def pytest_runtest_setup(item):
 def pytest_addoption(parser):
     parser.addoption("--runstaged", action="store_true", default=False, help="run staged order tests")
     parser.addoption("--runalgo", action="store_true", default=False, help="run algo order tests")
-    parser.addoption("--runbars", action="store_true", default=False, help="run barchart tests")
+    parser.addoption("--runbars", action="store_true", default=True, help="run barchart tests")
 
 def pytest_collection_modifyitems(config, items):
     def modify(option, reason, tag):

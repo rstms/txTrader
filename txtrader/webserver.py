@@ -81,6 +81,7 @@ class webserver(object):
         ret = {}
         ret['txtrader'] = HEADER
         ret['python'] = sys.version
+        ret['flags'] = self.api.flags()
         #ret['pip'] = check_output('pip list', shell=True)
         self.render(d, ret)
 

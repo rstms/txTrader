@@ -118,12 +118,14 @@ class API_Symbol(object):
         self.last_trade_minute = -1
         self.last_api_minute = -1
 
-        self.rawdata = ''
+        self.rawdata = {} 
         self.last_quote = ''
         self.output('API_Symbol %s %s created for client %s' %
                     (self, symbol, client_id))
         self.output('Adding %s to watchlist' % self.symbol)
         self.barchart = {}
+
+        self.data_request_pending = True
 
         # request initial symbol data
         self.cxn_updates = None
@@ -139,10 +141,14 @@ class API_Symbol(object):
             handler = RTX_LocalCallback(self.api, self.barchart_request_handler)
             callback = API_Callback(self.api, self.cxn_initbars.id, 'init_symbol_barchart', handler, self.api.callback_timeout['ADDSYMBOL'])
             self.cxn_initbars.request(table, what, where, callback)
+            self.barchart_request_pending = True 
 
             # enable realtime barchart updates
             self.cxn_bars = self.api.cxn_get(service, topic)
             self.cxn_bars.advise(table, what, where, self.barchart_advise_handler)
+        else:
+            self.barchart_request_pending = False
+            self.cxn_bars = None
 
     def __str__(self):
         return 'API_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s vwap=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.vwap, self.clients)
@@ -196,9 +202,10 @@ class API_Symbol(object):
             service, topic, table, what, where = self.quotes_advise_fields()
             cb = API_Callback(self.api, self.cxn_updates.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_quotes_advise))
             self.cxn_updates.unadvise(table, what, where, cb)
-            service, topic, table, what, where = self.bars_advise_fields()
-            cb = API_Callback(self.api, self.cxn_bars.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_bars_advise))
-            self.cxn_bars.unadvise(table, what, where, cb)
+            if self.cxn_bars:
+                service, topic, table, what, where = self.bars_advise_fields()
+                cb = API_Callback(self.api, self.cxn_bars.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_bars_advise))
+                self.cxn_bars.unadvise(table, what, where, cb)
 
     def cancel_quotes_advise(self, data):
         self.output('quotes_advise terminated: %s' % repr(data))
@@ -225,12 +232,17 @@ class API_Symbol(object):
         for k,v in self.rawdata.items():
             if str(v).startswith('Error '):
                 self.rawdata[k]=''
+        self.data_request_pending = False 
+        self.complete_symbol_init()
 
-        if self.api.symbol_init(self):
-            # enable live price updates 
-            service, topic, table, what, where = self.quotes_advise_fields()
-            self.cxn_updates = self.api.cxn_get(service, topic)
-            self.cxn_updates.advise(table, what, where, self.parse_fields)
+    def complete_symbol_init(self):
+        # when both initial quote and barchart (if enabled) have been received, respond to the client 
+        if not (self.data_request_pending or self.barchart_request_pending):
+            if self.api.symbol_init(self):
+                # enable live price updates 
+                service, topic, table, what, where = self.quotes_advise_fields()
+                self.cxn_updates = self.api.cxn_get(service, topic)
+                self.cxn_updates.advise(table, what, where, self.parse_fields)
 
     def quotes_advise_fields(self):
         service = 'TA_SRV'
@@ -323,6 +335,8 @@ class API_Symbol(object):
             self.barchart = {}
             for bar in self.api.format_barchart(data)['bars']:
                 self.barchart['%s %s' % (bar[0], bar[1])] = bar[2:]        
+            self.barchart_request_pending = False
+            self.complete_symbol_init()
 
     def bars_advise_fields(self):
         service = 'TA_SRV'
@@ -918,6 +932,14 @@ class RTX(object):
         self.repeater = LoopingCall(self.EverySecond)
         self.repeater.start(1)
 
+    def flags(self):
+        return {
+          'TICKER': self.enable_ticker,
+          'HIGH_LOW': self.enable_high_low,
+          'BARCHART': self.enable_barchart,
+          'SECONDS_TICK': self.enable_seconds_tick,
+        }
+
     def record_callback_metrics(self, label, elapsed, expired):
         m = self.callback_metrics.setdefault(label, {'tot':0, 'min': 9999, 'max': 0, 'avg': 0, 'exp': 0, 'hst': []})
         total = m['tot']  
@@ -929,7 +951,6 @@ class RTX(object):
         m['hst'].append(elapsed)
         if len(m['hst']) > CALLBACK_METRIC_HISTORY_LIMIT:
           del m['hst'][0]
-
         
     def cxn_register(self, cxn):
         if ENABLE_CXN_DEBUG:
