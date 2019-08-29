@@ -29,6 +29,7 @@ class Monitor(object):
         self.port = port
         self.user = user
         self.password = password
+        self.shutdown_pending = False
         self.channel = ''
         self.callback_types = ['status', 'error', 'time', 'order', 'execution', 'quote', 'trade', 'tick', 'shutdown']
         self.flags = 'noquotes notrades'
@@ -45,6 +46,7 @@ class Monitor(object):
 
     def shutdown_event(self):
         self._callback('shutdown', 'reactor shutdown detected')
+        self.shutdown_pending = True
         if self.connection: 
             self.connection.disconnect()
 
@@ -69,9 +71,10 @@ class Monitor(object):
             delete(self.callbacks[cb_type])
 
     def _callback(self, cb_type, cb_data):
-        if cb_type in self.callbacks.keys():
-            if not self.callbacks[cb_type](cb_type, cb_data):
-                reactor.callFromThread(reactor.stop)
+        if not self.shutdown_pending: 
+            if cb_type in self.callbacks.keys():
+                if not self.callbacks[cb_type](cb_type, cb_data):
+                    reactor.callFromThread(reactor.stop)
 
     def _cb_print(self, label, msg):
         print('%s: %s' % (label, repr(msg)))

@@ -610,7 +610,7 @@ class API_Callback(object):
 
     def _format_orders(self, rows, oid, _filter):
         #pprint({'format_orders': rows})
-        print('_format_orders %s %s' % (oid, _filter))
+        #print('_format_orders %s %s' % (oid, _filter))
         for row in rows or []:
             if row:
                 self.api.handle_order_response(row)
