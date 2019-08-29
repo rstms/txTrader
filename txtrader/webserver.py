@@ -138,8 +138,7 @@ class webserver(object):
         ret = None
         if symbol in self.api.symbols.keys():
             api_symbol = self.api.symbols[symbol]
-            if api_symbol.barchart:
-                ret = api_symbol.barchart['bars']
+            ret = api_symbol.barchart_render()
         self.render(d, ret)
 
     def json_query_accounts(self, args, d):

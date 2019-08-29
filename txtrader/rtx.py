@@ -114,27 +114,35 @@ class API_Symbol(object):
         self.low = 0.0
         self.minute_high = 0.0
         self.minute_low = 0.0
+        self.last_trade_time = '00:00:00'
         self.last_trade_minute = -1
         self.last_api_minute = -1
 
         self.rawdata = ''
-        self.api.symbols[symbol] = self
         self.last_quote = ''
         self.output('API_Symbol %s %s created for client %s' %
                     (self, symbol, client_id))
         self.output('Adding %s to watchlist' % self.symbol)
-        # request initial symbol data
-        self.cxn = api.cxn_get('TA_SRV', 'LIVEQUOTE')
-        cb = API_Callback(self.api, self.cxn.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), self.api.callback_timeout['ADDSYMBOL'])
-        self.cxn.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
+        self.barchart = {}
 
-        # initialize barchart 
-        self.barchart = None
-        # request initial barchart data
+        # request initial symbol data
+        self.cxn_updates = None
+        self.cxn_init = api.cxn_get('TA_SRV', 'LIVEQUOTE')
+        cb = API_Callback(self.api, self.cxn_init.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), self.api.callback_timeout['ADDSYMBOL'])
+        self.cxn_init.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
+
         if self.api.enable_barchart:
-            self.cxn = api.cxn_get('TA_SRV', BARCHART_TOPIC)
-            cb = API_Callback(self.api, self.cxn.id, 'init_symbol', RTX_LocalCallback(self.api, self.barchart_request_handler), self.api.callback_timeout['ADDSYMBOL'])
-            self.cxn.request('INTRADAY', BARCHART_FIELDS, "DISP_NAME='%s',BARINTERVAL=1" % symbol, cb)
+            # configure initial REQUEST and ongoning ADVISE 1-minute barchart data
+            service, topic, table, what, where = self.bars_advise_fields()
+            # request initial barchart data
+            self.cxn_initbars = self.api.cxn_get(service, topic)
+            handler = RTX_LocalCallback(self.api, self.barchart_request_handler)
+            callback = API_Callback(self.api, self.cxn_initbars.id, 'init_symbol_barchart', handler, self.api.callback_timeout['ADDSYMBOL'])
+            self.cxn_initbars.request(table, what, where, callback)
+
+            # enable realtime barchart updates
+            self.cxn_bars = self.api.cxn_get(service, topic)
+            self.cxn_bars.advise(table, what, where, self.barchart_advise_handler)
 
     def __str__(self):
         return 'API_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s vwap=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.vwap, self.clients)
@@ -154,12 +162,13 @@ class API_Symbol(object):
         ret = {
             'symbol': self.symbol,
             'last': self.last,
+            'time': self.last_trade_time,
             'size': self.size,
             'volume': self.volume,
             'open': self.open,
             'close': self.close,
             'vwap': self.vwap,
-            'fullname': self.fullname
+            'fullname': self.fullname,
         }
         if self.api.enable_high_low: 
           ret['high'] = self.high
@@ -184,7 +193,18 @@ class API_Symbol(object):
         self.clients.discard(client)
         if not self.clients:
             self.output('Removing %s from watchlist' % self.symbol)
-            # TODO: stop live updates of market data from RTX
+            service, topic, table, what, where = self.quotes_advise_fields()
+            cb = API_Callback(self.api, self.cxn_updates.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_quotes_advise))
+            self.cxn_updates.unadvise(table, what, where, cb)
+            service, topic, table, what, where = self.bars_advise_fields()
+            cb = API_Callback(self.api, self.cxn_bars.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_bars_advise))
+            self.cxn_bars.unadvise(table, what, where, cb)
+
+    def cancel_quotes_advise(self, data):
+        self.output('quotes_advise terminated: %s' % repr(data))
+
+    def cancel_bars_advise(self, data):
+        self.output('bars_advise terminated: %s' % repr(data))
 
     def update_quote(self):
         quote = 'quote.%s:%s %d %s %d' % (
@@ -207,16 +227,22 @@ class API_Symbol(object):
                 self.rawdata[k]=''
 
         if self.api.symbol_init(self):
-            self.init_price_advise()
+            # enable live price updates 
+            service, topic, table, what, where = self.quotes_advise_fields()
+            self.cxn_updates = self.api.cxn_get(service, topic)
+            self.cxn_updates.advise(table, what, where, self.parse_fields)
 
-    def init_price_advise(self):
-        self.cxn = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
-        fields = 'TRDTIM_1,TRDPRC_1,TRDVOL_1,ACVOL_1,OPEN_PRC,HST_CLOSE,VWAP'
+    def quotes_advise_fields(self):
+        service = 'TA_SRV'
+        topic = 'LIVEQUOTE'
+        table = 'LIVEQUOTE'
+        what = 'TRDTIM_1,TRDPRC_1,TRDVOL_1,ACVOL_1,OPEN_PRC,HST_CLOSE,VWAP'
         if self.api.enable_ticker:
-            fields += ',BID,BIDSIZE,ASK,ASKSIZE'
+            what += ',BID,BIDSIZE,ASK,ASKSIZE'
         if self.api.enable_high_low:
-            fields += ',HIGH_1,LOW_1'
-        self.cxn.advise('LIVEQUOTE', fields, "DISP_NAME='%s'" % self.symbol, self.parse_fields)
+            what += ',HIGH_1,LOW_1'
+        where = "DISP_NAME='%s'" % self.symbol
+        return (service, topic, table, what, where)
         
     def parse_fields(self, cxn, data):
         trade_flag = False
@@ -231,6 +257,7 @@ class API_Symbol(object):
             self.last = self.api.parse_tql_float(data['TRDPRC_1'], pid, 'TRDPRC_1')
             trade_flag = True
             if 'TRDTIM_1' in data.keys():
+                self.last_trade_time = data['TRDTIM_1']
                 minute = int(self.api.parse_tql_time(data['TRDTIM_1'], pid, 'TRDTIM_1')/60)
                 # reset intra-minute high and low when minute rolls over
                 if self.last_trade_minute != minute:
@@ -288,22 +315,37 @@ class API_Symbol(object):
 
     def barchart_request_handler(self, data):
         data = json.loads(data)
-        #pprint({'barchart_request_handler': data})
-        # parse the REQUEST barchart
-        self.barchart_parse(data)
+        if not data:
+            self.api.error_handler(self.id, 'Barchart data request failed: %s' % repr(self))
+        else:
+            #pprint({'barchart_request_handler': data})
+            # parse the REQUEST barchart rows
+            self.barchart = {}
+            for bar in self.api.format_barchart(data)['bars']:
+                self.barchart['%s %s' % (bar[0], bar[1])] = bar[2:]        
 
-        # configure ADVISE for live updates of 1-minute barchart data
-        self.cxn_bars = self.api.cxn_get('TA_SRV', BARCHART_TOPIC)
+    def bars_advise_fields(self):
+        service = 'TA_SRV'
+        topic = BARCHART_TOPIC
+        table = 'INTRADAY'
+        what = BARCHART_FIELDS
         where = "DISP_NAME='%s',BARINTERVAL=1" % self.symbol
-        self.cxn_bars.advise('INTRADAY', BARCHART_FIELDS, where, self.barchart_advise_handler)
+        return (service, topic, table, what, where)
 
     def barchart_advise_handler(self, cxn, data):
-        data = json.loads(data)
-        #pprint({'barchart_advise_handler': data})
-        self.barchart_parse(data)
+        #pprint({'barchart_advise_handler':  data, 'cxn': repr(cxn)})
+        # parse the ADVISE barchart update 
+        key = data['TRD_DATE'] + ' ' + data['TRDTIM_1']
+        self.barchart[key] = [data[f] for f in ['OPEN_PRC', 'HIGH_1', 'LOW_1', 'SETTLE', 'ACVOL_1']]
 
-    def barchart_parse(self, data):
-        self.barchart = self.api.format_barchart(data)
+    def barchart_render(self):
+        keys = self.barchart.keys()
+        keys.sort()
+        ret=[]
+        for key in keys:
+            ret.append(key.split(' '))
+            ret[-1].extend(self.barchart[key])
+        return ret
 
 class API_Order(object):
     def __init__(self, api, oid, data, origin, callback=None):
@@ -602,7 +644,7 @@ class RTX_Connection(object):
         self.topic = topic
         self.key = '%s;%s' % (service, topic)
         self.last_query = ''
-        self.api.output('Creating %s' % repr(self))
+        self.api.output('RTX_Connection init %s' % repr(self))
         self.api.cxn_register(self)
         self.api.gateway_send('connect %s %s' % (self.id, self.key))
         self.ack_pending = 'CONNECTION PENDING'
@@ -618,6 +660,9 @@ class RTX_Connection(object):
         self.connected = False
         self.on_connect_action = None
         self.update_ready()
+
+    def __del__(self):
+        self.api.output('RTX_Connection delete %s' % repr(self))
 
     def __repr__(self):
         return self.__str__()
@@ -694,9 +739,9 @@ class RTX_Connection(object):
                     self.connected = True
                     if self.on_connect_action:
                         self.ready = True
-                        cmd, arg, exa, cba, exr, cbr, exs, cbs, cbu, uhr = self.on_connect_action
+                        cmd, arg, exa, cba, cbr, exs, cbs, cbu, uhr = self.on_connect_action
                         self.api.output('%s sending on_connect_action: %s' % (repr(self), repr(self.on_connect_action)))
-                        self.send(cmd, arg, exa, cba, exr, cbr, exs, cbs, cbu, uhr)
+                        self.send(cmd, arg, exa, cba, cbr, exs, cbs, cbu, uhr)
                         self.on_connect_action = None
                         print('after on_connect_action send: self.status_pending=%s' % self.status_pending)
 
@@ -724,49 +769,51 @@ class RTX_Connection(object):
             else:
                 self.api.error_handler(self.id, 'Update Unexpected: %s' % repr(data))
 
-    def query(self, cmd, table, what, where, ex_ack=None, cb_ack=None, ex_response=None, cb_response=None, ex_status=None, cb_status=None, cb_update=None, update_handler=None):
+    def query(self, cmd, table, what, where, expect_ack=None, ack_callback=None, response_callback=None, expect_status=None, status_callback=None, update_callback=None, update_handler=None):
         tql='%s;%s;%s' % (table, what, where)
         self.last_query='%s: %s' % (cmd, tql)
-        ret = self.send(cmd, tql, ex_ack, cb_ack, ex_response, cb_response, ex_status, cb_status, cb_update, update_handler)
+        ret = self.send(cmd, tql, expect_ack, ack_callback, response_callback, expect_status, status_callback, update_callback, update_handler)
 
     def request(self, table, what, where, callback):
-        return self.query('request', table, what, where, 'REQUEST_OK', None, True, callback)
+        return self.query('request', table, what, where, expect_ack='REQUEST_OK', response_callback=callback)
 
     def advise(self, table, what, where, handler):
-        return self.query('advise', table, what, where, 'ADVISE_OK', None, None, None, 'OnOtherAck', None, None, handler)
+        return self.query('advise', table, what, where, expect_ack='ADVISE_OK', expect_status='OnOtherAck', update_handler=handler)
 
     def adviserequest(self, table, what, where, callback, handler):
-        return self.query('adviserequest', table, what, where, 'ADVISEREQUEST_OK', None, True, callback, 'OnOtherAck', None, None, handler)
+        return self.query('adviserequest', table, what, where, expect_ack='ADVISE_REQUEST_OK', response_callback=callback, expect_status='OnOtherAck', update_handler=handler)
 
     def unadvise(self, table, what, where, callback):
-        return self.query('unadvise', table, what, where, 'UNADVISE_OK', None, None, None, 'OnOtherAck', callback)
+        # force ready state so the unadvise command will be sent
+        self.ready = True
+        return self.query('unadvise', table, what, where, expect_ack='UNADVISE_OK', expect_status='OnOtherAck', status_callback=callback)
 
     def poke(self, table, what, where, data, ack_callback, callback):
         tql = '%s;%s;%s!%s' % (table, what, where, data)
         self.last_query = 'poke: %s' % tql
-        return self.send('poke', tql, "POKE_OK", ack_callback, None, None, 'OnOtherAck', callback)
+        return self.send('poke', tql, expect_ack="POKE_OK", ack_callback=ack_callback, expect_status='OnOtherAck', status_callback=callback)
 
     def execute(self, command, callback):
         self.last_query = 'execute: %s' % command
-        return self.send('execute', command, "EXECUTE_OK", callback)
+        return self.send('execute', command, expect_ack="EXECUTE_OK", ack_callback=callback)
 
     def terminate(self, code, callback):
         self.last_query = 'terminate: %s' % str(code) 
-        return self.send('terminate', str(code), "TERMINATE_OK", callback)
+        return self.send('terminate', str(code), expect_ack="TERMINATE_OK", ack_callback=callback)
 
-    def send(self, cmd, args, ex_ack=None, cb_ack=None, ex_response=None, cb_response=None, ex_status=None, cb_status=None, cb_update=None, update_handler=None):
+    def send(self, cmd, args, expect_ack=None, ack_callback=None, response_callback=None, expect_status=None, status_callback=None, update_callback=None, update_handler=None):
         if self.ready:
             self.cmd = cmd
             if 'request' in cmd:
                 self.response_rows = []
             ret = self.api.gateway_send('%s %s %s' % (cmd, self.id, args))
-            self.ack_pending = ex_ack
-            self.ack_callback = cb_ack
-            self.response_pending = ex_response
-            self.response_callback = cb_response
-            self.status_pending = ex_status
-            self.status_callback = cb_status
-            self.update_callback = cb_update
+            self.ack_pending = expect_ack
+            self.ack_callback = ack_callback
+            self.response_pending = bool(response_callback)
+            self.response_callback = response_callback
+            self.status_pending = expect_status
+            self.status_callback = status_callback
+            self.update_callback = update_callback
             self.update_handler = update_handler
         else:
             if self.on_connect_action:
@@ -774,7 +821,7 @@ class RTX_Connection(object):
                 ret = False
             else:
                 self.api.output('%s storing on_connect_action (%s)...' % (self, cmd))
-                self.on_connect_action = (cmd, args, ex_ack, cb_ack, ex_response, cb_response, ex_status, cb_status, cb_update, update_handler)
+                self.on_connect_action = (cmd, args, expect_ack, ack_callback, response_callback, expect_status, status_callback, update_callback, update_handler)
                 ret = True
         return ret
 
@@ -796,7 +843,6 @@ class RTX_LocalCallback(object):
             self.errback_handler(error)
         else:
             self.api.error_handler(repr(self), 'Failure: undefined errback_handler for Connection: %s error=%s' % (repr(self), repr(error)))
-
 
 class RTX(object):
     def __init__(self):
@@ -859,6 +905,7 @@ class RTX(object):
         self.next_order_id = -1
         self.last_minute = -1
         self.symbols = {}
+        self.barchart = None
         self.primary_exchange_map = {}
         self.gateway_sender = None
         self.active_cxn = {}
@@ -1425,7 +1472,7 @@ class RTX(object):
         self.output('symbol_enable(%s,%s,%s)' % (symbol, client, callback))
         if not symbol in self.symbols.keys():
             cb = API_Callback(self, symbol, 'add-symbol', callback, self.callback_timeout['ADDSYMBOL'])
-            symbol = API_Symbol(self, symbol, client, cb)
+            self.symbols[symbol] = API_Symbol(self, symbol, client, cb)
             self.add_symbol_callbacks.append(cb)
         else:
             self.symbols[symbol].add_client(client)
