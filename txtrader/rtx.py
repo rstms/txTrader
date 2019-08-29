@@ -156,19 +156,11 @@ class API_Symbol(object):
     def __repr__(self):
         return str(self)
 
-    def reset_minute_calculated_fields(self):
-        print('### reset_minute_calculated_fields %s last_trade_minute=%d last_api_minute=%d' % (self.symbol, self.last_trade_minute, self.last_api_minute))
-        self.minute_high = self.last
-        self.minute_low = self.last
-
     def export(self):
-        # ensure reset of intra-minute price fields if API time has rolled since last trade update 
-        if self.api.trade_minute != self.last_api_minute:
-            self.reset_minute_calculated_fields()
         ret = {
             'symbol': self.symbol,
             'last': self.last,
-            'time': self.last_trade_time,
+            'tradetime': self.last_trade_time,
             'size': self.size,
             'volume': self.volume,
             'open': self.open,
@@ -179,13 +171,13 @@ class API_Symbol(object):
         if self.api.enable_high_low: 
           ret['high'] = self.high
           ret['low'] = self.low
-          ret['minute_high'] = self.minute_high
-          ret['minute_low'] = self.minute_low
         if self.api.enable_ticker:
           ret['bid'] = self.bid
           ret['bidsize'] = self.bid_size
           ret['ask'] = self.ask
           ret['asksize'] = self.ask_size
+        if self.api.enable_barchart:
+          ret['bars'] = self.barchart_render()
         return ret
 
     def add_client(self, client):
@@ -199,9 +191,10 @@ class API_Symbol(object):
         self.clients.discard(client)
         if not self.clients:
             self.output('Removing %s from watchlist' % self.symbol)
-            service, topic, table, what, where = self.quotes_advise_fields()
-            cb = API_Callback(self.api, self.cxn_updates.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_quotes_advise))
-            self.cxn_updates.unadvise(table, what, where, cb)
+            if self.cxn_updates:
+                service, topic, table, what, where = self.quotes_advise_fields()
+                cb = API_Callback(self.api, self.cxn_updates.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_quotes_advise))
+                self.cxn_updates.unadvise(table, what, where, cb)
             if self.cxn_bars:
                 service, topic, table, what, where = self.bars_advise_fields()
                 cb = API_Callback(self.api, self.cxn_bars.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_bars_advise))
@@ -270,19 +263,8 @@ class API_Symbol(object):
             trade_flag = True
             if 'TRDTIM_1' in data.keys():
                 self.last_trade_time = data['TRDTIM_1']
-                minute = int(self.api.parse_tql_time(data['TRDTIM_1'], pid, 'TRDTIM_1')/60)
-                # reset intra-minute high and low when minute rolls over
-                if self.last_trade_minute != minute:
-                    print('### trade minute rollover detected: %d' % minute)
-                    self.last_trade_minute = minute
-                    self.last_api_minute = self.api.trade_minute
-                    self.reset_minute_calculated_fields()
             else:
                 self.api.error_handler(repr(self), 'ERROR: TRDPRC_1 without TRDTIM_1')
-
-            # calculate intra-minute high and low
-            self.minute_high = max(self.minute_high, self.last)
-            self.minute_low = min(self.minute_low, self.last)        
 
         if 'HIGH_1' in data.keys():
             self.high = self.api.parse_tql_float(data['HIGH_1'], pid, 'HIGH_1')
@@ -353,13 +335,7 @@ class API_Symbol(object):
         self.barchart[key] = [data[f] for f in ['OPEN_PRC', 'HIGH_1', 'LOW_1', 'SETTLE', 'ACVOL_1']]
 
     def barchart_render(self):
-        keys = self.barchart.keys()
-        keys.sort()
-        ret=[]
-        for key in keys:
-            ret.append(key.split(' '))
-            ret[-1].extend(self.barchart[key])
-        return ret
+        return [key.split(' ')+self.barchart[key] for key in sorted(self.barchart.keys())]
 
 class API_Order(object):
     def __init__(self, api, oid, data, origin, callback=None):
@@ -1298,7 +1274,6 @@ class RTX(object):
                 hour, minute, second = [int(i) for i in time_field.split(':')[0:3]]
                 self.now = self.feedzone.localize(datetime.datetime(year,month,day,hour,minute,second)).astimezone(self.localzone)
                 self.trade_minute = self.now.hour * 60 + self.now.minute
-                print('### api.trade_minute=%d api.now=%s' % (self.trade_minute, self.now))
                 if minute != self.last_minute:
                     self.last_minute = minute
                     self.WriteAllClients('time: %s %s:00' % (self.now.strftime('%Y-%m-%d'), self.now.strftime('%H:%M')))

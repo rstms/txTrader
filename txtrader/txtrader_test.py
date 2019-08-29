@@ -67,7 +67,9 @@ def test_stock_prices(api):
         ('high', float, True),
         ('low', float, True),
         ('close', float, True),
-        ('vwap', float, True)
+        ('vwap', float, True),
+        ('tradetime', unicode, True),
+        ('bars', list, True),
     ]
 
     for key, _type, required in tdata:
