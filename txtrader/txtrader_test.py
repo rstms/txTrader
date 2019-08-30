@@ -69,8 +69,8 @@ def test_stock_prices(api):
         ('close', float, True),
         ('vwap', float, True),
         ('tradetime', unicode, True),
-        ('bars', list, True),
     ]
+    #('bars', list, True),
 
     for key, _type, required in tdata:
       assert key in p.keys()
@@ -588,16 +588,11 @@ def test_trade_submission_error_bad_quantity(api):
 
 @pytest.mark.bars
 def test_bars(api): 
-    sbar = '2017-07-06 09:30:00' 
-    ebar = '2017-07-06 09:40:00' 
-    ret = api.query_bars('SPY', 1, sbar, ebar) 
-    assert ret 
-    assert type(ret) == dict 
+    assert api.add_symbol('SPY')
+    sbar = '2017-08-29 09:30:00' 
+    ebar = '2017-08-29 09:40:00' 
+    bars = api.query_bars('SPY', 1, sbar, ebar) 
     if _verify_barchart_enabled(api):
-        assert not 'error' in ret
-        assert 'symbol' in ret.keys()
-        assert 'bars' in ret.keys()
-        bars = ret['bars'] 
         assert bars 
         assert type(bars) == list 
         for bar in bars:
@@ -614,8 +609,8 @@ def test_bars(api):
             assert type(b_volume) == int 
             print('%s %s %.2f %.2f %.2f %.2f %d' % (b_date, b_time, b_open, b_high, b_low, b_close, b_volume))
     else:
-        assert 'error' in ret
-        print('%s' % repr(ret))
+        assert not bars 
+        print('bars=%s' % repr(ret))
 
 def test_cancel_order(api):
     ret = api.cancel_order('000')
