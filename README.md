@@ -241,6 +241,7 @@ TXTRADER_PASSWORD               | password for HTTP session
 TXTRADER_SUPPRESS_ERROR_CODES   | list of error codes to ignore (TWS)
 TXTRADER_TCP_PORT               | port used by client for txTrader ASCII output
 TXTRADER_TEST_ACCOUNT		| account used for regression test
+TXTRADER_TIME_OFFSET            | adjust clock for test system's 15-minute delayed data
 TXTRADER_USERNAME               | username for HTTP session 
 TXTRADER_VENV                   | virtualenv directory (used by run script, cli script)
 
