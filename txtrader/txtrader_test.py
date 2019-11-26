@@ -241,6 +241,7 @@ def test_symbol_bars(api):
     assert 'TSLA' in api.query_symbols()
     bars = api.query_symbol_bars('TSLA')
     assert type(bars) == list
+    print(repr(bars))
     if _verify_barchart_enabled(api):
         assert type(bars[0]) == list
         for bar in bars:

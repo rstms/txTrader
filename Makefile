@@ -154,7 +154,7 @@ TPARM :=
 
 test: $(TESTS)
 	@echo Testing...
-	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader env TXTRADER_TEST_MODE=$(MODE) py.test -svx $(TPARM) $(notdir $^)
+	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader env TXTRADER_TEST_MODE=$(MODE) py.test -vx $(TPARM) $(notdir $^)
 
 run: 
 	@echo Running...

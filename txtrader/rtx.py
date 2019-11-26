@@ -20,6 +20,7 @@ from hexdump import hexdump
 import pytz
 import tzlocal
 import datetime
+import re
 from pprint import pprint
 
 from txtrader.config import Config
@@ -94,6 +95,7 @@ class RtxClientFactory(ReconnectingClientFactory):
 class API_Symbol(object):
     def __init__(self, api, symbol, client_id, init_callback):
         self.api = api
+        self.api.symbols[symbol]=self
         self.id = str(uuid1())
         self.output = api.output
         self.clients = set([client_id])
@@ -120,41 +122,14 @@ class API_Symbol(object):
 
         self.rawdata = {} 
         self.last_quote = ''
-        self.output('API_Symbol %s %s created for client %s' %
-                    (self, symbol, client_id))
-        self.output('Adding %s to watchlist' % self.symbol)
+        self.output('API_Symbol %s %s created for client %s' % (self, symbol, client_id))
         self.barchart = {}
-
-        self.data_request_pending = True
 
         # request initial symbol data
         self.cxn_updates = None
         self.cxn_init = api.cxn_get('TA_SRV', 'LIVEQUOTE')
         cb = API_Callback(self.api, self.cxn_init.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), self.api.callback_timeout['ADDSYMBOL'])
         self.cxn_init.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
-
-        self.cxn_bars = None
-        if self.api.enable_barchart:
-            self.barchart_request_pending = True 
-        else:
-            self.barchart_request_pending = False
-
-    def init_barchart(self):
-        if self.api.enable_barchart:
-            # configure initial REQUEST and ongoning ADVISE 1-minute barchart data
-            service, topic, table, what, where = self.bars_advise_fields()
-            # request initial barchart data
-            self.cxn_initbars = self.api.cxn_get(service, topic)
-            handler = RTX_LocalCallback(self.api, self.barchart_request_handler)
-            callback = API_Callback(self.api, self.cxn_initbars.id, 'init_symbol_barchart', handler, self.api.callback_timeout['ADDSYMBOL'])
-            self.cxn_initbars.request(table, what, where, callback)
-
-    def enable_barchart_updates(self):
-        # enable realtime barchart updates
-        service, topic, table, what, where = self.bars_advise_fields()
-        self.cxn_bars = self.api.cxn_get(service, topic)
-        self.cxn_bars.advise(table, what, where, self.barchart_advise_handler)
-
 
     def __str__(self):
         return 'API_Symbol(%s bid=%s bidsize=%d ask=%s asksize=%d last=%s size=%d volume=%d close=%s vwap=%s clients=%s' % (self.symbol, self.bid, self.bid_size, self.ask, self.ask_size, self.last, self.size, self.volume, self.close, self.vwap, self.clients)
@@ -201,16 +176,10 @@ class API_Symbol(object):
                 service, topic, table, what, where = self.quotes_advise_fields()
                 cb = API_Callback(self.api, self.cxn_updates.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_quotes_advise))
                 self.cxn_updates.unadvise(table, what, where, cb)
-            if self.cxn_bars:
-                service, topic, table, what, where = self.bars_advise_fields()
-                cb = API_Callback(self.api, self.cxn_bars.id, 'unadvise', RTX_LocalCallback(self.api, self.cancel_bars_advise))
-                self.cxn_bars.unadvise(table, what, where, cb)
+                self.cxn_updates = None
 
     def cancel_quotes_advise(self, data):
         self.output('quotes_advise terminated: %s' % repr(data))
-
-    def cancel_bars_advise(self, data):
-        self.output('bars_advise terminated: %s' % repr(data))
 
     def update_quote(self):
         quote = 'quote.%s:%s %d %s %d' % (
@@ -225,25 +194,33 @@ class API_Symbol(object):
 
     def init_handler(self, data):
         data = json.loads(data)
-        self.output('API_Symbol init: %s' % data)
         self.parse_fields(None, data[0])
         self.rawdata = data[0]
         for k,v in self.rawdata.items():
             if str(v).startswith('Error '):
                 self.rawdata[k]=''
-        self.data_request_pending = False 
         self.cxn_init = None
-        self.init_barchart()
-        #self.complete_symbol_init()
+  
+        # if this is a valid symbol
+        if self.api.enable_barchart:
+ 	    self.barchart_query('.', self.complete_barchart_init)
+        elif self.api.symbol_init(self):
+            self.complete_symbol_init()
+
+    def barchart_query(self, start, callback):
+        self.api.query_bars(self.symbol, 1, start, '.', RTX_LocalCallback(self.api, callback))
+        
+    def complete_barchart_init(self, bars):
+        self.barchart_update(bars)
+        if self.api.symbol_init(self):
+            self.complete_symbol_init()
 
     def complete_symbol_init(self):
-        # when both initial quote and barchart (if enabled) have been received, respond to the client 
-        if not (self.data_request_pending or self.barchart_request_pending):
-            if self.api.symbol_init(self):
-                # enable live price updates 
-                service, topic, table, what, where = self.quotes_advise_fields()
-                self.cxn_updates = self.api.cxn_get(service, topic)
-                self.cxn_updates.advise(table, what, where, self.parse_fields)
+        # enable live price updates 
+        self.output('Adding %s to watchlist' % self.symbol)
+        service, topic, table, what, where = self.quotes_advise_fields()
+        self.cxn_updates = self.api.cxn_get(service, topic)
+        self.cxn_updates.advise(table, what, where, self.parse_fields)
 
     def quotes_advise_fields(self):
         service = 'TA_SRV'
@@ -273,6 +250,11 @@ class API_Symbol(object):
                 self.last_trade_time = ' '.join(self.api.format_barchart_date(data['TRD_DATE'], data['TRDTIM_1']))
             else:
                 self.api.error_handler(repr(self), 'ERROR: TRDPRC_1 without TRD_DATE, TRDTIM_1')
+           
+            # don't request an update during the symbol init processing
+            if self.api.enable_barchart and (not self.cxn_init):
+                # query a barchart update after each trade
+ 	        self.barchart_query('-5', self.barchart_update)
 
         if 'HIGH_1' in data.keys():
             self.high = self.api.parse_tql_float(data['HIGH_1'], pid, 'HIGH_1')
@@ -315,38 +297,14 @@ class API_Symbol(object):
             if trade_flag:
                 self.update_trade()
 
-    def barchart_request_handler(self, data):
-        data = json.loads(data)
-        if not data:
-            self.api.error_handler(self.id, 'Barchart data request failed: %s' % repr(self))
-        else:
-            #pprint({'barchart_request_handler': data})
-            # parse the REQUEST barchart rows
-            self.barchart = {}
-            for bar in self.api.format_barchart(data):
-                self.barchart['%s %s' % (bar[0], bar[1])] = bar[2:]        
-            if self.barchart_request_pending:
-                self.barchart_request_pending = False
-                self.complete_symbol_init()
-                # don't use advise for barchart data updates until API is fixed
-                #self.enable_barchart_updates()
-
-    def bars_advise_fields(self):
-        service = 'TA_SRV'
-        topic = BARCHART_TOPIC
-        table = 'INTRADAY'
-        what = BARCHART_FIELDS
-        where = "DISP_NAME='%s',BARINTERVAL=1" % self.symbol
-        return (service, topic, table, what, where)
-
-    def barchart_advise_handler(self, cxn, data):
-        #pprint({'barchart_advise_handler':  data, 'cxn': repr(cxn)})
-        # parse the ADVISE barchart update 
-        key = ' '.join(self.api.format_barchart_date(data['TRD_DATE'], data['TRDTIM_1']))
-        self.barchart[key] = [data[f] for f in ['OPEN_PRC', 'HIGH_1', 'LOW_1', 'SETTLE', 'ACVOL_1']]
-
     def barchart_render(self):
         return [key.split(' ') + self.barchart[key] for key in sorted(self.barchart.keys())]
+
+    def barchart_update(self, bars):
+        for bar in json.loads(bars):
+            print('===barchart_update %s' % (repr(bar)))
+            self.barchart['%s %s' % (bar[0], bar[1])] = bar[2:]        
+
 
 class API_Order(object):
     def __init__(self, api, oid, data, origin, callback=None):
@@ -518,7 +476,7 @@ class API_Order(object):
 class API_Callback(object):
     def __init__(self, api, id, label, callable, timeout=0):
         """callable is stored and used to return results later"""
-        #api.output('API_Callback.__init__() %s' % self)
+        api.output('API_Callback.__init__%s' % repr((self, api, id, label, callable, timeout)))
         self.api = api
         self.id = id
         self.label = label
@@ -587,7 +545,7 @@ class API_Callback(object):
         return data
 
     def format_positions(self, rows):
-        # Positions should return {'ACOUNT': {'SYMBOL': QUANTITY, ...}, ...}
+        # Positions should return {'ACCOUNT': {'SYMBOL': QUANTITY, ...}, ...}
         positions = {}
         [positions.setdefault(a, {}) for a in self.api.accounts]
 	#print('format_positions: rows=%s' % repr(rows))
@@ -1286,8 +1244,9 @@ class RTX(object):
             else:
                 year, month, day = [int(i) for i in date_field.split('-')[0:3]]
                 hour, minute, second = [int(i) for i in time_field.split(':')[0:3]]
-                self.feed_now = datetime.datetime(year,month,day,hour,minute,second)
-                self.now = self.localize_time(self.feed_now) + datetime.timedelta(seconds=self.time_offset)
+                self.feed_now = datetime.datetime(year,month,day,hour,minute,second) + datetime.timedelta(seconds=self.time_offset)
+                self.now = self.localize_time(self.feed_now)
+		# don't add time offset
                 if minute != self.last_minute:
                     self.last_minute = minute
                     self.WriteAllClients('time: %s %s:00' % (self.now.strftime('%Y-%m-%d'), self.now.strftime('%H:%M')))
@@ -1295,7 +1254,12 @@ class RTX(object):
             self.error_handler(self.id, 'handle_time: unexpected null input')
 
     def localize_time(self, feedtime):
+        """return API time corrected for local timezone"""
         return self.feedzone.localize(feedtime).astimezone(self.localzone)
+  
+    def unlocalize_time(self, apitime):
+        """reverse localize_time to convert local timezone to API time"""
+        return self.localzone.localize(apitime).astimezone(self.feedzone)
 
     def handle_time_error(self, error):
         #time timeout error is reported as an expired callback
@@ -1352,6 +1316,7 @@ class RTX(object):
         acb = API_Callback(self, tid, 'ticket-ack', RTX_LocalCallback(self, self.ticket_submit_ack_callback), self.callback_timeout['ORDER'])
         cb = API_Callback(self, tid, 'ticket', RTX_LocalCallback(self, self.ticket_submit_callback), self.callback_timeout['ORDER'])
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').poke('ORDERS', '*', '', fields, acb, cb)
+        # TODO: add cb and acb to callback lists so they can be tested for timeout
 
     def ticket_submit_ack_callback(self, data):
         """called when staged order ticket request has been submitted with 'poke' and Ack has returned""" 
@@ -1485,7 +1450,7 @@ class RTX(object):
         self.output('symbol_enable(%s,%s,%s)' % (symbol, client, callback))
         if not symbol in self.symbols.keys():
             cb = API_Callback(self, symbol, 'add-symbol', callback, self.callback_timeout['ADDSYMBOL'])
-            self.symbols[symbol] = API_Symbol(self, symbol, client, cb)
+            API_Symbol(self, symbol, client, cb)
             self.add_symbol_callbacks.append(cb)
         else:
             self.symbols[symbol].add_client(client)
@@ -1583,18 +1548,18 @@ class RTX(object):
         data = json.loads(data)
         self.output('global cancel: %s' % repr(data))
 
+    def _fail_query_bars(self, msg, callback):
+        self.error_handler(self.id, msg)
+        API_Callback(self, 0, 'query-bars-failed', callback).complete(None)
+        return None
+
     def query_bars(self, symbol, interval, bar_start, bar_end, callback):
 
         if not self.enable_barchart:
-            # return with error if barchart function is disabled
-            self.error_handler(self.id, 'ALERT: query_bars unimplemented')
-            API_Callback(self, 0, 'query-bars-disabled', callback).complete({'error': 'barchart data is disabled'})
-            return
+            return self._fail_query_bars('ALERT: query_bars unimplemented', callback)
 
         if not symbol in self.symbols:
-            self.error_handler(self.id, 'query_bars failed: symbol %s not active' % symbol)
-            API_Callback(self, 0, 'query-bars-failed', callback).complete(None)
-            return
+            return self._fail_query_bars('query_bars failed: symbol %s not active' % symbol, callback)
 
         # intraday n-minute bars; given stop date, number of days, minutes_per_bar
         if str(interval).startswith('D'):
@@ -1613,12 +1578,13 @@ class RTX(object):
 
         session_start = datetime.datetime.strptime(self.symbols[symbol].rawdata['STARTTIME'], '%H:%M:%S')
         session_stop = datetime.datetime.strptime(self.symbols[symbol].rawdata['STOPTIME'], '%H:%M:%S')
+        print('barchart session_start=%s session_stop=%s' % (session_start, session_stop))
  
         # if start time is a negative integer, use it as an offset from the end time
         # limit start and end to the session start and stop times
         if str(bar_start).startswith('-'):
             offset = int(str(bar_start))
-            bar_end = self.feed_now
+            bar_end = self.feed_now + datetime.timedelta(minutes=1)
             if bar_end.time() > session_stop.time():
                 bar_end = datetime.datetime(bar_end.year, bar_end.month, bar_end.day, session_stop.hour, session_stop.minute, 0)
             if table=='DAILY':
@@ -1631,18 +1597,28 @@ class RTX(object):
             print('offset bar start: start=%s end=%s' % (repr(bar_start), repr(bar_end)))
         else:
             # implement defaults for bar_start, bar_end
-            if not bar_start or bar_start == '.':
+            if bar_start=='.':
                 bar_start = self.feed_now.date().isoformat()
-
-            if not bar_end or bar_end == '.':
+            elif re.match('^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d$', bar_start):
+                # bar_start provided with time; adjust timezone
+                bar_start = self.unlocalize_time(datetime.datetime.strptime(bar_start, '%Y-%m-%d %H:%M:%S')).isoformat(' ')[:19]
+            elif not re.match('^\d\d\d\d-\d\d-\d\d$', bar_start):
+                return self._fail_query_bars('query_bars: bad parameter format bar_start=%s' % bar_start, callback) 
+                
+            if bar_end=='.':
                 bar_end = bar_start[:10]
+            elif re.match('^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d$', bar_end):
+                bar_end = self.unlocalize_time(datetime.datetime.strptime(bar_end, '%Y-%m-%d %H:%M:%S')).isoformat(' ')[:19]
+            elif not re.match('^\d\d\d\d-\d\d-\d\d$', bar_end):
+                return self._fail_query_bars('query_bars: bad parameter format bar_end=%s' % bar_end, callback) 
 
-            if len(bar_start) < 19:
-                bar_start += ' 00:00:00'
+            if len(bar_start) == 10:
+                bar_start += session_start.time().strftime(' %H:%M:%S')
 
-            if len(bar_end) < 19:
-                bar_end += ' 23:59:00'
+            if len(bar_end) == 10:
+                bar_end += session_stop.time().strftime(' %H:%M:%S')
 
+            print('+++ bar_start=%s bar_end=%s' % (repr(bar_start), repr(bar_end)))
             bar_start = datetime.datetime.strptime(bar_start, '%Y-%m-%d %H:%M:%S')
             bar_end = datetime.datetime.strptime(bar_end, '%Y-%m-%d %H:%M:%S')
    
@@ -1653,7 +1629,6 @@ class RTX(object):
         if bar_end.time() > session_stop.time() or table=='DAILY':
             bar_end = datetime.datetime(bar_end.year, bar_end.month, bar_end.day, session_stop.hour, session_stop.minute, 0)
 
-        # "DAYS_BACK=%d" % ((bar_end - bar_start).days + 1),
         where = ','.join([
 	    "DISP_NAME='%s'" % symbol,
             "BARINTERVAL=%d" % interval,
@@ -1662,6 +1637,8 @@ class RTX(object):
             "STOPDATE='%s'" % bar_end.strftime('%Y/%m/%d'),
             "CHART_STOPTIME='%s'" % bar_end.strftime('%H:%M'),
         ])
+
+        print('barchart where=%s' % repr(where))
 
         cb = API_Callback(self, '%s;%s' % (table, where), 'barchart', callback, self.callback_timeout['BARCHART'])
         self.cxn_get('TA_SRV', BARCHART_TOPIC).request(table, BARCHART_FIELDS, where, cb)
@@ -1674,7 +1651,8 @@ class RTX(object):
             row = rows[0]
             # DAILY bars have no time values, so spoof for the parser
             if row['TRDTIM_1']=='Error 17':
-                session_start = self.symbols[row['DISP_NAME']].rawdata['STARTTIME']
+                symbol = self.symbols[row['DISP_NAME']]
+                session_start = symbol.rawdata['STARTTIME']
                 row['TRDTIM_1'] = [session_start for t in row['TRD_DATE']]
             types = {k:type(v) for k, v in row.iteritems()}
             print('types = %s' % repr(types))
