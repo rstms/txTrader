@@ -128,7 +128,7 @@ class API_Symbol(object):
         # request initial symbol data
         self.cxn_updates = None
         self.cxn_init = api.cxn_get('TA_SRV', 'LIVEQUOTE')
-        cb = API_Callback(self.api, self.cxn_init.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler), self.api.callback_timeout['ADDSYMBOL'])
+        cb = API_Callback(self.api, self.cxn_init.id, 'init_symbol', RTX_LocalCallback(self.api, self.init_handler, self.init_failed), self.api.callback_timeout['ADDSYMBOL'])
         self.cxn_init.request('LIVEQUOTE', '*', "DISP_NAME='%s'" % symbol, cb)
 
     def __str__(self):
@@ -203,13 +203,19 @@ class API_Symbol(object):
   
         # if this is a valid symbol
         if self.api.enable_barchart:
- 	    self.barchart_query('.', self.complete_barchart_init)
+ 	    self.barchart_query('.', self.complete_barchart_init, self.barchart_init_failed)
         elif self.api.symbol_init(self):
             self.complete_symbol_init()
 
-    def barchart_query(self, start, callback):
-        self.api.query_bars(self.symbol, 1, start, '.', RTX_LocalCallback(self.api, callback))
+    def init_failed(self, error):
+        self.api.error_handler(repr(self), 'ERROR: Initial query failed for symbol %s', self.symbol)
+
+    def barchart_query(self, start, callback, errback):
+        self.api.query_bars(self.symbol, 1, start, '.', RTX_LocalCallback(self.api, callback, errback))
         
+    def barchart_init_failed(self, error):
+        self.api.error_handler(repr(self), 'ERROR: Initial BARCHART query failed for symbol %s', self.symbol)
+
     def complete_barchart_init(self, bars):
         self.barchart_update(bars)
         if self.api.symbol_init(self):
@@ -476,7 +482,7 @@ class API_Order(object):
 class API_Callback(object):
     def __init__(self, api, id, label, callable, timeout=0):
         """callable is stored and used to return results later"""
-        api.output('API_Callback.__init__%s' % repr((self, api, id, label, callable, timeout)))
+        #api.output('API_Callback.__init__%s' % repr((self, api, id, label, callable, timeout)))
         self.api = api
         self.id = id
         self.label = label
