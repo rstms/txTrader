@@ -3,7 +3,7 @@
 THIS_FILE := $(lastword $(MAKEFILE_LIST))
 
 REQUIRED_PACKAGES = daemontools-run ucspi-tcp python python-dev
-REQUIRED_PIP = pytest Twisted hexdump ujson simplejson requests pytz tzlocal ../IbPy/dist/*.tar.gz
+REQUIRED_PIP = pytest Twisted hexdump git+git://github.com/esnme/ultrajson.git simplejson requests pytz tzlocal ../IbPy/dist/*.tar.gz
 PROJECT_PIP = ./dist/*.tar.gz
 
 #PYTHON = /usr/bin/python
