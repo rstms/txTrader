@@ -40,6 +40,7 @@ for line in ilines:
         tflag = False
     elif cflag and line.startswith('COMMIT'):
         commit = check_output('git log | head -1', shell=True)
+        commit = check_output('git log --decorate=full | head -1', shell=True)
         olines.append('COMMIT=\'%s\'\n' % str(commit).strip())
         cflag = False
     else:

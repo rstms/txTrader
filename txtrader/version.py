@@ -12,13 +12,13 @@
 """
 
 VERSION_MAJOR = 1
-VERSION_MINOR = 11 
+VERSION_MINOR = 12 
 VERSION_PATCH = 0
-BUILD=2405
+BUILD=2406
 DATE='2020-03-11'
-TIME='11:01:35'
+TIME='13:29:31'
 VERSION = '%s.%s.%s' % (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH)
 DATETIME = '%s %s' % (DATE, TIME)
 LABEL = 'TxTrader Securities Trading API Controller'
 HEADER = '%s %s (build %s) %s' % (LABEL, VERSION, BUILD, DATETIME)
-COMMIT='commit e01dcb6540d5b32363c6c6504f02192827fae8c2'
+COMMIT='commit ef96247825f3078ae09b69b3d631046d29f50193 (HEAD -> refs/heads/master, refs/remotes/origin/master, refs/remotes/origin/HEAD)'
