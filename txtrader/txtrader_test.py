@@ -23,7 +23,6 @@ import datetime
 
 FILL_TIMEOUT = 30
 
-
 TEST_ALGO_ROUTE='{"TEST-ATM-ALGO":{"STRAT_ID":"BEST","BOOKING_TYPE":"3","STRAT_TIME_TAGS":"168;126","STRAT_PARAMETERS":{"99970":"2","99867":"N","847":"BEST","90057":"BEST","91000":"4.1.95"},"ORDER_FLAGS_3":"0","ORDER_CLONE_FLAG":"1","STRAT_TARGET":"ATDL","STRATEGY_NAME":"BEST","STRAT_REDUNDANT_DATA":{"UseStartTime":"false","UseEndTime":"false","cConditionalType":"{NULL}"},"STRAT_TIME_ZONE":"America/New_York","STRAT_TYPE":"COWEN_ATM_US_EQT","STRAT_STRING_40":"BEST","UTC_OFFSET":"-240"}}'
 
 testmode = 'RTX'
@@ -47,7 +46,6 @@ def test_init(api):
     print('done')
 
 def test_stock_prices(api):
-
     s = api.add_symbol('IBM')
     assert s
 
@@ -611,7 +609,7 @@ def test_bars(api):
             print('%s %s %.2f %.2f %.2f %.2f %d' % (b_date, b_time, b_open, b_high, b_low, b_close, b_volume))
     else:
         assert not bars 
-        print('bars=%s' % repr(ret))
+        print('bars=%s' % repr(bars))
 
 def test_cancel_order(api):
     ret = api.cancel_order('000')

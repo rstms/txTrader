@@ -26,3 +26,6 @@ class Config(object):
         if not name in environ.keys():
             print('ALERT: Config.get(%s) failed' % key)
         return environ[name]
+
+    def getenv(self, key):
+        return environ[key]

@@ -11,6 +11,7 @@
 
 """
 import datetime
+from subprocess import check_output
 
 filename = 'txtrader/version.py'
 
@@ -21,6 +22,7 @@ ifile.close()
 bflag=True
 dflag=True
 tflag=True
+cflag=True
 
 olines=[]
 for line in ilines:
@@ -36,6 +38,10 @@ for line in ilines:
         now = datetime.datetime.now()
         olines.append('TIME=\'%s\'\n' % now.strftime('%H:%M:%S'))
         tflag = False
+    elif cflag and line.startswith('COMMIT'):
+        commit = check_output('git log --decorate=full | head -1', shell=True)
+        olines.append('COMMIT=\'%s\'\n' % str(commit).strip())
+        cflag = False
     else:
         olines.append(line)
 

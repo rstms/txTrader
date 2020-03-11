@@ -17,6 +17,10 @@ import time
 
 testmode = 'RTX'
 
+# 'netstat -ant | egrep LISTEN | egrep 50090>/dev/null'
+def _listening(host, port, timeout=1):
+    return not subprocess.call('ansible -i "127.0.0.1," -c local -v -m wait_for -a "host=%s port=%d timeout=%d" all' % (str(host), int(port), int(timeout)) , shell=True)
+
 class Server(object):
     def __init__(self):
         self.mode = os.environ['TXTRADER_TEST_MODE'] if 'TXTRADER_TEST_MODE' in os.environ else 'RTX'
@@ -32,14 +36,11 @@ class Server(object):
         assert self.process
         print('%s created as pid %d' % (repr(self.process), self.process.pid))
         print('Waiting for txtrader listen ports...')
-        while subprocess.call('netstat -ant | egrep LISTEN | egrep 50090>/dev/null', shell=True):
+        while not _listening('localhost', 50090):
             time.sleep(.25)
-        assert not subprocess.call(
-            'ps -ax | egrep [t]wistd >/dev/null', shell=True)
-        assert not subprocess.call(
-            'netstat -ant | egrep LISTEN | egrep 50090>/dev/null', shell=True)
-        assert not subprocess.call(
-            'netstat -ant | egrep LISTEN | egrep 50070>/dev/null', shell=True)
+        assert not subprocess.call('ps -ax | egrep [t]wistd >/dev/null', shell=True)
+        assert _listening('localhost', 50090, timeout=20)
+        assert _listening('localhost', 50070, timeout=20)
 
         print('Waiting for txtrader status "Up"...')
         while subprocess.call("[ \"$(txtrader rtx status)\" = '\"Up\"' ]", shell=True):
