@@ -1,0 +1,12 @@
+#!/bin/sh
+exec 2>&1
+if [ -f ./disable ]; then
+  echo Disabled, sleeping...
+  sleep 60
+else
+  CFG=/etc/txtrader
+  USER=`cat $CFG/TXTRADER_DAEMON_USER`
+  VENV=`cat $CFG/TXTRADER_VENV`
+  . $VENV/bin/activate
+  exec envdir $CFG setuidgid $USER twistd --reactor=poll --nodaemon --logfile=- --pidfile= --python=./txtrader.tac
+fi

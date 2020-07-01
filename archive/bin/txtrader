@@ -1,0 +1,2 @@
+#!/bin/bash
+. $(cat /etc/txtrader/TXTRADER_VENV)/bin/activate && exec envdir /etc/txtrader python -m txtrader.client "$@"
