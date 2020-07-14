@@ -60,3 +60,10 @@ service/txtrader.pid
 runlog
 .pytest_cache/
 etc/txtrader/TXTRADER_VENV
+archive
+notes
+.dist
+.fmt
+.tox
+.docker
+.dockerhub
