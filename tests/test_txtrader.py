@@ -35,8 +35,8 @@ def _listening(host, port):
 @pytest.fixture(scope='module')
 def api():
     api = API(testmode)
-    host = api.hostname
-    port = api.port
+    host = api.config['TXTRADER_HOST']
+    port = int(api.config['TXTRADER_HTTP_PORT'])
     assert _listening(host, port)
     #api.shutdown('testing shutdown request')
     #time.sleep(3)
