@@ -467,6 +467,59 @@ class API_Execution(object):
         return result
 
 
+class API_Order_Mapper():
+
+    def __init__(self, api, symbol, update_fields):
+        self.api = api
+        self.symbol = symbol
+        self.updates = []
+        self.api.debug(f"{self}.__init__({api}, {symbol} {update_fields}")
+        self.add_update(update_fields)
+        assert not symbol in self.api.pending_order_lookups
+        self.api.pending_order_lookups[self.symbol] = self
+
+    def __del__(self):
+        self.api.debug(f"{self}.__del__()")
+
+    def __repr__(self):
+        return f"{__class__.__name__}<{hex(id(self))} {self.symbol}>"
+
+    def add_update(self, update):
+        self.api.debug(f"{self} add_update {update}")
+        self.updates.append(update)
+        self.api.debug(f"{self} {[u['permid'] for u in self.updates]}")
+        if len(self.updates) == 1:
+            self.api.debug(f"{self} enabling symbol {self.symbol}")
+            cb = RTX_LocalCallback(self.api, self.handle_response, self.handle_failure)
+            self.api.symbol_enable(self.symbol, self.api, cb)
+
+    def handle_response(self, response):
+        self.api.debug(f"{self} handle_response {response}")
+        assert self.symbol in self.api.symbols
+        assert self.api.symbols[self.symbol].cusip
+        response = json.loads(response)
+        assert type(response) == dict
+        assert 'cusip' in response
+        assert response['cusip']
+        assert response['symbol'] == self.symbol
+        assert self.api.pending_order_lookups[self.symbol] == self
+
+        cusip = self.api.get_cusip(self.symbol)
+        assert cusip
+
+        while len(self.updates):
+            fields = self.updates.pop(0)
+            fields['cusip'] = cusip
+            self.api.debug(f"{self} sending amended order update: {fields}")
+            self.api.send_order_update(fields)
+        # remove the pending list entry (that contains self)
+        self.api.pending_order_lookups.pop(self.symbol)
+
+    def handle_failure(self, error):
+        self.api.error(f"{self} handle_failure")
+        self.api.error_handler(f"{self}", f"Order Mapping {self.symbol} failed; {error}")
+        
+
 class API_Execution_Mapper():
 
     def __init__(self, api, symbol, update_fields):
@@ -608,7 +661,7 @@ class API_Order(object):
 
         if not init:
             if json.dumps(self.fields) != field_state:
-                self.api.send_order_status(self)
+                self.api.send_order_update(self.render())
 
     def update_fill_fields(self):
         if self.fields['TYPE'] in ['UserSubmitOrder', 'ExchangeTradeOrder']:
@@ -846,7 +899,7 @@ class API_Callback(object):
             if row:
                 self.api.handle_execution_response(row)
         if xid:
-            results = self.api.executions[oid].render() if xid in self.api.executions else None
+            results = self.api.executions[xid].render() if xid in self.api.executions else None
         elif oid:
             results = {k: v.render() for k, v in self.api.executions.items() if v.fields['ORIGINAL_ORDER_ID'] == oid}
         else:
@@ -1163,6 +1216,7 @@ class RTX(object):
         self.position_callbacks = []
         self.executions = {}
         self.pending_execution_lookups = {}
+        self.pending_order_lookups = {}
         self.execution_callbacks = []
         self.execution_status_callbacks = []
         self.order_callbacks = []
@@ -1531,15 +1585,6 @@ class RTX(object):
             self.tickets[tid] = self.pending_tickets[tid]
             del self.pending_tickets[tid]
 
-    def send_order_status(self, order):
-        fields = order.render()
-        oid = fields['permid']
-        self.WriteAllClients(
-            f"{order.ticket}.{oid} {fields['account']} {fields['raw']['TYPE']} {fields['status']}",
-            option_flag=f"{order.ticket}-notification"
-        )
-        self.WriteAllClients(f"{order.ticket}-data {json.dumps(fields)}", option_flag=f"{order.ticket}-data")
-
     def handle_execution_update(self, cxn, msg):
         if msg:
             self.handle_execution_response(msg)
@@ -1567,6 +1612,26 @@ class RTX(object):
             ret = symbol.cusip
         return ret
 
+    def send_order_update(self, update_fields):
+        """send a rendered order out to clients"""
+        self.debug(f"{self} send_order_update({update_fields})")
+        assert isinstance(update_fields, dict)
+        symbol = update_fields['symbol']
+        if not update_fields.get('cusip'):
+            self.debug(f"{self} order update is missing CUSIP, starting mapping...")
+            mapper = self.pending_order_lookups.get(symbol)
+            if not mapper:
+                mapper = API_Order_Mapper(self, symbol, update_fields)
+            mapper.add_update(update_fields)
+        else:
+            _class = update_fields['class']
+            oid = update_fields['permid']
+            account = update_fields['account']
+            _type = update_fields['raw']['TYPE']
+            status = update_fields['status']
+            self.WriteAllClients( f"{_class}.{oid} {account} {_type} {status}", option_flag=f"{_class}-notification")
+            self.WriteAllClients(f"{_class}-data {account} {json.dumps(update_fields)}", option_flag=f"{_class}-data")
+
     def send_execution_update(self, update_fields):
         """send a rendered execution out to clients"""
         self.debug(f"{self} send_execution_update({update_fields})")
@@ -1582,9 +1647,10 @@ class RTX(object):
             self.debug(f"{self} execution update validated, sending to clients")
             xid = update_fields['ORDER_ID']
             oid = update_fields['ORIGINAL_ORDER_ID']
+            account = update_fields['ACCOUNT']
             status = update_fields['CURRENT_STATUS']
-            self.WriteAllClients(f"execution.{xid} {oid} {status}", option_flag='execution-notification')
-            self.WriteAllClients(f"execution-data {json.dumps(update_fields)}", option_flag='execution-data')
+            self.WriteAllClients(f"execution.{xid} {account} {oid} {status}", option_flag='execution-notification')
+            self.WriteAllClients(f"execution-data {account} {json.dumps(update_fields)}", option_flag='execution-data')
 
     def make_account(self, row):
         return '%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'])
@@ -2087,7 +2153,7 @@ class RTX(object):
     def request_execution(self, xid, callback):
         cb = API_Callback(self, xid, 'execution', callback, self.callback_timeout['ORDERSTATUS'])
         self.cxn_get('ACCOUNT_GATEWAY',
-                     'ORDER').request('ORDERS', '*', f"TYPE='ExchangeTradeOrder',ORDER_ID='{oid}'", cb)
+                     'ORDER').request('ORDERS', '*', f"TYPE='ExchangeTradeOrder',ORDER_ID='{xid}'", cb)
         self.execution_status_callbacks.append(cb)
 
     def request_account_data(self, account, fields, callback):
