@@ -14,12 +14,14 @@
 from txtrader.version import VERSION, DATE, LABEL
 
 import sys
+import os
 
 from twisted.internet.protocol import Factory
 from twisted.internet import reactor, defer
 from twisted.protocols import basic
 from socket import gethostname
 import ujson as json
+import traceback
 
 
 class tcpserver(basic.NetstringReceiver):
@@ -55,6 +57,7 @@ class tcpserver(basic.NetstringReceiver):
         }
         self.authmap = set([])
         self.options = {}
+        self.halt_on_exception = bool(int(os.environ.get('TXTRADER_ENABLE_EXCEPTION_HALT', 0)))
 
     def stringReceived(self, line):
         line = line.decode().strip()
@@ -68,9 +71,11 @@ class tcpserver(basic.NetstringReceiver):
                     response = self.commands[cmd](line)
                 except Exception as ex:
                     self.factory.api.error_handler(self, repr(ex))
+                    traceback.print_exc()
                     response = f'.error: {repr(ex)}'
                     self.send(response)
-                    raise ex
+                    if self.halt_on_exception:
+                        reactor.callLater(0, reactor.stop)
                 else:
                     if response:
                         self.send(response)

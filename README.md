@@ -91,6 +91,7 @@ TXTRADER_ENABLE_HIGH_LOW        | 1                | include daily high/low in q
 TXTRADER_ENABLE_BARCHART        | 1                | enable barchart queries
 TXTRADER_ENABLE_SYMBOL_BARCHART | 0                | include intraday minute bars in query_symbol response
 TXTRADER_ENABLE_SECONDS_TICK    | 1                | update time every second per the API clock
+TXTRADER_ENABLE_EXCEPTION_HALT  | 0                | shutdown on runtime exceptions
 TXTRADER_LOG_API_MESSAGES       | 0                | output API message text
 TXTRADER_DEBUG_API_MESSAGES     | 0                | output API message hex dump
 TXTRADER_LOG_CLIENT_MESSAGES    | 0                | output client message text

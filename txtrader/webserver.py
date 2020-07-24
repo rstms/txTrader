@@ -18,9 +18,11 @@ from twisted.internet import reactor, endpoints, defer
 
 from pprint import pprint
 import sys
+import os
 from datetime import datetime
 import ujson as json
 from txtrader.version import HEADER
+import traceback
 
 USABLE_BEFORE_INIT = ['status', 'uptime', 'version', 'help', 'shutdown']
 
@@ -383,6 +385,7 @@ class Leaf(Resource):
         self.log_request = log_request
         self.log_response = log_response
         self.require_init = require_init
+        self.halt_on_exception = bool(int(os.environ.get('TXTRADER_ENABLE_EXCEPTION_HALT',0)))
 
     def render(self, request):
         self.request = request
@@ -393,7 +396,12 @@ class Leaf(Resource):
                 request.setResponseCode(http.SERVICE_UNAVAILABLE, message='Gateway not Initialized'.encode())
                 return json.dumps(False).encode()
             else:
-                return Resource.render(self, request)
+                try:
+                    return Resource.render(self, request)
+                except Exception as exc:
+                    traceback.print_exc()
+                    if self.halt_on_exception:
+                        reactor.callLater(0, reactor.stop)
         else:
             request.setResponseCode(http.UNAUTHORIZED)
             return json.dumps({'status': 'Unauthorized'}).encode()

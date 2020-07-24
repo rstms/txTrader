@@ -29,6 +29,7 @@ defaults = {
     "ENABLE_HIGH_LOW": 1,
     "ENABLE_SECONDS_TICK": 1,
     "ENABLE_TICKER": 0,
+    "ENABLE_EXCEPTION_HALT": 0,
     "GET_BACKOFF_FACTOR": .1,
     "GET_RETRIES": 8,
     "HOST": "127.0.0.1",

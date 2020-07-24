@@ -29,6 +29,7 @@ from txtrader.config import Config
 from txtrader.tcpserver import tcpserver
 
 from logging import getLevelName, DEBUG, INFO, WARNING, ERROR, CRITICAL
+import traceback
 
 CALLBACK_METRIC_HISTORY_LIMIT = 1024
 
@@ -60,13 +61,16 @@ class RtxClient(LineReceiver):
 
     def __init__(self, rtx):
         self.rtx = rtx
+        self.halt_on_exception = bool(int(os.environ.get('TXTRADER_ENABLE_EXCEPTION_HALT', 0)))
 
     def lineReceived(self, data):
         try:
             self.rtx.gateway_receive(data)
         except Exception as ex:
             self.rtx.error_handler(repr(self), repr(ex))
-            raise ex
+            traceback.print_exc()
+            if self.halt_on_exception:
+                reactor.callLater(0, reactor.stop)
 
     def connectionMade(self):
         self.rtx.gateway_connect(self)
@@ -111,7 +115,7 @@ class API_Symbol(object):
         self.callback = init_callback
         self.clear()
         self.register()
-        self.api.debug(f"{self}.__init__({self.api}, {self.symbol} {client_id}, {init_callback})")
+        self.api.debug(f"__init__({repr(self)}, {self.api}, {self.symbol} {client_id}, {init_callback})")
         self.api_initial_request()
 
     def __del__(self):
@@ -403,7 +407,7 @@ class API_Execution(object):
         self.api = api
         self.oid = oid
         self.callback = callback
-        self.api.debug(f"{self}.__init__({self.api}, {self.oid}, {self.callback})")
+        self.api.debug(f"__init__({self}, {self.api}, {self.oid}, {self.callback})")
         self.fids = DEFAULT_EXECUTION_FIELDS.split(',')
         self.fields = {}
 
@@ -467,29 +471,61 @@ class API_Execution(object):
         return result
 
 
-class API_Order_Mapper():
+class API_Update():
 
-    def __init__(self, api, symbol, update_fields):
+    def __init__(self, fields, callback):
+        self.fields = fields
+        self.callback = callback
+        self.api.debug(f"__init__({self})")
+
+    def __del__(self):
+        self.api.debug(f"{self}.__del__()")
+
+    def __str__(self):
+        return repr(self)
+
+    def __repr__(self):
+        return f"{__class__.__name__}<{hex(id(self))} {len(self.fields)}>"
+
+
+class API_Order_Update(API_Update):
+
+    def callback(symbol):
+        self.fields['cusip'] = symbol.cusip
+        self.fields['raw']['CUSIP'] = symbol.cusip
+        if self.fields['updates']:
+            self.fields['updates'][0]['fields']['CUSIP'] = symbol.cusip
+        self.callback(self.fields)
+
+
+class API_Execution_Update(API_Update):
+
+    def callback(symbol):
+        self.fields['CUSIP'] = symbol.cusip
+        self.callback(self.fields)
+
+
+class API_Update_Mapper():
+
+    def __init__(self, api, symbol):
         self.api = api
         self.symbol = symbol
-        self.updates = []
-        self.api.debug(f"{self}.__init__({api}, {symbol} {update_fields}")
-        self.add_update(update_fields)
-        assert not symbol in self.api.pending_order_lookups
-        self.api.pending_order_lookups[self.symbol] = self
+        self.updates = []    # updates are API_Update
+        self.api.debug(f"__init__({self})")
+        assert not symbol in self.api.pending_mapper_lookups
+        self.api.pending_mapper_lookups[symbol] = self
 
     def __del__(self):
         self.api.debug(f"{self}.__del__()")
 
     def __repr__(self):
-        return f"{__class__.__name__}<{hex(id(self))} {self.symbol}>"
+        return f"{__class__.__name__}<{hex(id(self))} {self.symbol} {len(self.updates)}>"
 
     def add_update(self, update):
-        self.api.debug(f"{self} add_update {update}")
         self.updates.append(update)
-        self.api.debug(f"{self} {[u['permid'] for u in self.updates]}")
+        self.api.debug(f"{self} add_update")
         if len(self.updates) == 1:
-            self.api.debug(f"{self} enabling symbol {self.symbol}")
+            self.api.debug(f"{self} initial update, enabling symbol {self.symbol}")
             cb = RTX_LocalCallback(self.api, self.handle_response, self.handle_failure)
             self.api.symbol_enable(self.symbol, self.api, cb)
 
@@ -502,75 +538,21 @@ class API_Order_Mapper():
         assert 'cusip' in response
         assert response['cusip']
         assert response['symbol'] == self.symbol
-        assert self.api.pending_order_lookups[self.symbol] == self
-
+        assert self.api.pending_mapper_lookups[self.symbol] == self
         cusip = self.api.get_cusip(self.symbol)
         assert cusip
 
+        api_symbol = self.api.symbols[self.symbol]
         while len(self.updates):
-            fields = self.updates.pop(0)
-            fields['cusip'] = cusip
-            self.api.debug(f"{self} sending amended order update: {fields}")
-            self.api.send_order_update(fields)
+            update = self.updates.pop(0)
+            self.api.debug(f"{self} sending amended update: {update}")
+            update.callback(api_symbol)
         # remove the pending list entry (that contains self)
-        self.api.pending_order_lookups.pop(self.symbol)
+        self.api.pending_mapper_lookups.pop(self.symbol)
 
     def handle_failure(self, error):
         self.api.error(f"{self} handle_failure")
-        self.api.error_handler(f"{self}", f"Order Mapping {self.symbol} failed; {error}")
-
-
-class API_Execution_Mapper():
-
-    def __init__(self, api, symbol, update_fields):
-        self.api = api
-        self.symbol = symbol
-        self.updates = []
-        self.api.debug(f"{self}.__init__({api}, {symbol} {update_fields}")
-        self.add_update(update_fields)
-        assert not symbol in self.api.pending_execution_lookups
-        self.api.pending_execution_lookups[self.symbol] = self
-
-    def __del__(self):
-        self.api.debug(f"{self}.__del__()")
-
-    def __repr__(self):
-        return f"{__class__.__name__}<{hex(id(self))} {self.symbol}>"
-
-    def add_update(self, update):
-        self.api.debug(f"{self} add_update {update}")
-        self.updates.append(update)
-        self.api.debug(f"{self} {[u['ORDER_ID'] for u in self.updates]}")
-        if len(self.updates) == 1:
-            self.api.debug(f"{self} enabling symbol {self.symbol}")
-            cb = RTX_LocalCallback(self.api, self.handle_response, self.handle_failure)
-            self.api.symbol_enable(self.symbol, self.api, cb)
-
-    def handle_response(self, response):
-        self.api.debug(f"{self} handle_response {response}")
-        assert self.symbol in self.api.symbols
-        assert self.api.symbols[self.symbol].cusip
-        response = json.loads(response)
-        assert type(response) == dict
-        assert 'cusip' in response
-        assert response['cusip']
-        assert response['symbol'] == self.symbol
-        assert self.api.pending_execution_lookups[self.symbol] == self
-
-        cusip = self.api.get_cusip(self.symbol)
-        assert cusip
-
-        while len(self.updates):
-            fields = self.updates.pop(0)
-            fields['CUSIP'] = cusip
-            self.api.debug(f"{self} sending amended execution update: {fields}")
-            self.api.send_execution_update(fields)
-        # remove the pending list entry (that contains self)
-        self.api.pending_execution_lookups.pop(self.symbol)
-
-    def handle_failure(self, error):
-        self.api.error(f"{self} handle_failure")
-        self.api.error_handler(f"{self}", f"Execution Mapping {self.symbol} failed; {error}")
+        self.api.error_handler(f"{self}", f"Update Mapping for {self.symbol} failed; {error}")
 
 
 class API_Order(object):
@@ -581,7 +563,7 @@ class API_Order(object):
         self.data = data
         self.origin = origin
         self.callback = callback
-        self.api.debug(f"{self}.__init__({self.api}, {self.oid}, {self.data}, {self.origin}, {self.callback})")
+        self.api.debug(f"__init__({self}, {self.api}, {self.oid}, {self.data}, {self.origin}, {self.callback})")
         self.updates = []
         self.suborders = {}
         self.fields = {}
@@ -762,7 +744,7 @@ class API_Callback(object):
         self.callable = callable
         self.started = time.time()
         self.timeout = timeout or api.callback_timeout['DEFAULT']
-        self.api.debug(f"{self}.__init__({self.api}, {self.id}, {self.label}, {self.callable}, {self.timeout})")
+        self.api.debug(f"__init__({self}, {self.api}, {self.id}, {self.label}, {self.callable}, {self.timeout})")
         self.expire = self.started + timeout
         self.done = False
         self.data = None
@@ -915,7 +897,7 @@ class RTX_Connection(object):
         self.service = service
         self.topic = topic
         self.key = '%s;%s' % (service, topic)
-        self.api.debug(f"{self}.__init__({api},{service},{topic})")
+        self.api.debug(f"__init__({self}, {api}, {service}, {topic})")
         self.last_query = ''
         self.api.cxn_register(self)
         self.api.gateway_send('connect %s %s' % (self.id, self.key))
@@ -946,7 +928,6 @@ class RTX_Connection(object):
             self.ack_pending or self.response_pending or self.status_pending or self.status_callback
             or self.update_callback or self.update_handler
         )
-        #self.api.debug('update_ready() %s %s' % (self.id, self.ready))
         if self.ready:
             self.api.cxn_activate(self)
 
@@ -1162,7 +1143,7 @@ class RTX_LocalCallback(object):
         self.errback_handler = errback_handler
         cbname = self.callback_handler.__name__
         ebname = self.errback_handler.__name__ if self.errback_handler else 'None'
-        self.api.debug(f"{self}.__init__({self.api}, {cbname}, {ebname})")
+        self.api.debug(f"__init__({self}, {self.api}, {cbname}, {ebname})")
 
     def __repr__(self):
         return f"{__class__.__name__}<{hex(id(self))}>"
@@ -1215,8 +1196,7 @@ class RTX(object):
         self.positions = {}
         self.position_callbacks = []
         self.executions = {}
-        self.pending_execution_lookups = {}
-        self.pending_order_lookups = {}
+        self.pending_mapper_lookups = {}
         self.execution_callbacks = []
         self.execution_status_callbacks = []
         self.order_callbacks = []
@@ -1254,7 +1234,7 @@ class RTX(object):
         self.repeater.start(1)
 
     def __repr__(self):
-        return f"{__class__.__name__}"
+        return f"{__class__.__name__}<{hex(id(self))}>"
 
     def init_config(self):
         self.config = Config(self.channel, output=self.output)
@@ -1270,6 +1250,7 @@ class RTX(object):
         self.enable_symbol_barchart = bool(int(self.config.get('ENABLE_SYMBOL_BARCHART')))
         self.enable_seconds_tick = bool(int(self.config.get('ENABLE_SECONDS_TICK')))
         self.enable_execution_account_format = bool(int(self.config.get('ENABLE_EXECUTION_ACCOUNT_FORMAT')))
+        self.halt_on_exception = bool(int(self.config.get('ENABLE_EXCEPTION_HALT')))
         self.gateway_disconnect_timeout = int(self.config.get('GATEWAY_DISCONNECT_TIMEOUT'))
         self.enable_gateway_disconnect_shutdown = bool(int(self.config.get('GATEWAY_DISCONNECT_SHUTDOWN')))
         self.log_api_messages = bool(int(self.config.get('LOG_API_MESSAGES')))
@@ -1389,8 +1370,11 @@ class RTX(object):
         hexdump(msg)
 
     def receive_exception(self, t, e, msg):
+        traceback.print_exc()
         self.error_handler(self.id, 'Exception %s %s parsing data from RTGW' % (t, e))
         self.dump_input_message(msg)
+        if self.halt_on_exception:
+            reactor.callLater(0, reactor.stop)
         return None
 
     def gateway_receive(self, msg):
@@ -1612,45 +1596,45 @@ class RTX(object):
             ret = symbol.cusip
         return ret
 
-    def send_order_update(self, update_fields):
+    def send_order_update(self, fields):
         """send a rendered order out to clients"""
-        self.debug(f"{self} send_order_update({update_fields})")
-        assert isinstance(update_fields, dict)
-        symbol = update_fields['symbol']
-        if not update_fields.get('cusip'):
-            self.debug(f"{self} order update is missing CUSIP, starting mapping...")
-            mapper = self.pending_order_lookups.get(symbol)
+        self.debug(f"{self} send_order_update({fields})")
+        assert isinstance(fields, dict)
+        symbol = fields['symbol']
+        if not fields.get('cusip'):
+            self.debug(f"{self} order update is missing CUSIP, deferring until mapped...")
+            mapper = self.pending_mapper_lookups.get(symbol)
             if not mapper:
-                mapper = API_Order_Mapper(self, symbol, update_fields)
-            mapper.add_update(update_fields)
+                mapper = API_Update_Mapper(self, symbol)
+            mapper.add_update(API_Order_Update(deepcopy(fields), self.send_order_update))
         else:
-            _class = update_fields['class']
-            oid = update_fields['permid']
-            account = update_fields['account']
-            _type = update_fields['raw']['TYPE']
-            status = update_fields['status']
+            _class = fields['class']
+            oid = fields['permid']
+            account = fields['account']
+            _type = fields['raw']['TYPE']
+            status = fields['status']
             self.WriteAllClients(f"{_class}.{oid} {account} {_type} {status}", option_flag=f"{_class}-notification")
-            self.WriteAllClients(f"{_class}-data {account} {json.dumps(update_fields)}", option_flag=f"{_class}-data")
+            self.WriteAllClients(f"{_class}-data {account} {json.dumps(fields)}", option_flag=f"{_class}-data")
 
-    def send_execution_update(self, update_fields):
+    def send_execution_update(self, fields):
         """send a rendered execution out to clients"""
-        self.debug(f"{self} send_execution_update({update_fields})")
-        assert isinstance(update_fields, dict)
-        symbol = update_fields['DISP_NAME']
-        if not update_fields.get('CUSIP'):
-            self.debug(f"{self} execution update is missing CUSIP, starting mapping...")
-            mapper = self.pending_execution_lookups.get(symbol)
+        self.debug(f"{self} send_execution_update({fields})")
+        assert isinstance(fields, dict)
+        symbol = fields['DISP_NAME']
+        if not fields.get('CUSIP'):
+            self.debug(f"{self} execution update is missing CUSIP, deferring until mapped...")
+            mapper = self.pending_mapper_lookups.get(symbol)
             if not mapper:
-                mapper = API_Execution_Mapper(self, symbol, update_fields)
-            mapper.add_update(update_fields)
+                mapper = API_Update_Mapper(self, symbol)
+            mapper.add_update(Api_Execution_Update(deepcopy(fields), self.send_execution_update))
         else:
             self.debug(f"{self} execution update validated, sending to clients")
-            xid = update_fields['ORDER_ID']
-            oid = update_fields['ORIGINAL_ORDER_ID']
-            account = update_fields['ACCOUNT']
-            status = update_fields['CURRENT_STATUS']
+            xid = fields['ORDER_ID']
+            oid = fields['ORIGINAL_ORDER_ID']
+            account = fields['ACCOUNT']
+            status = fields['CURRENT_STATUS']
             self.WriteAllClients(f"execution.{xid} {account} {oid} {status}", option_flag='execution-notification')
-            self.WriteAllClients(f"execution-data {account} {json.dumps(update_fields)}", option_flag='execution-data')
+            self.WriteAllClients(f"execution-data {account} {json.dumps(fields)}", option_flag='execution-data')
 
     def make_account(self, row):
         return '%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'])
