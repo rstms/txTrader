@@ -518,7 +518,7 @@ class API_Order_Mapper():
     def handle_failure(self, error):
         self.api.error(f"{self} handle_failure")
         self.api.error_handler(f"{self}", f"Order Mapping {self.symbol} failed; {error}")
-        
+
 
 class API_Execution_Mapper():
 
@@ -1629,7 +1629,7 @@ class RTX(object):
             account = update_fields['account']
             _type = update_fields['raw']['TYPE']
             status = update_fields['status']
-            self.WriteAllClients( f"{_class}.{oid} {account} {_type} {status}", option_flag=f"{_class}-notification")
+            self.WriteAllClients(f"{_class}.{oid} {account} {_type} {status}", option_flag=f"{_class}-notification")
             self.WriteAllClients(f"{_class}-data {account} {json.dumps(update_fields)}", option_flag=f"{_class}-data")
 
     def send_execution_update(self, update_fields):
