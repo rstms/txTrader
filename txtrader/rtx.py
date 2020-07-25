@@ -44,6 +44,8 @@ BARCHART_TOPIC = 'LIVEQUOTE'
 
 DEFAULT_EXECUTION_FIELDS = 'ORDER_ID,ORIGINAL_ORDER_ID,BANK,BRANCH,CUSTOMER,DEPOSIT,AVG_PRICE,BUYORSELL,CURRENCY,CURRENT_STATUS,DISP_NAME,EXCHANGE,EXIT_VEHICLE,FILL_ID,ORDER_RESIDUAL,ORIGINAL_PRICE,ORIGINAL_VOLUME,PRICE,PRICE_TYPE,TIME_STAMP,TIME_ZONE,MARKET_TRD_DATE,TRD_TIME,VOLUME,VOLUME_TRADED,CUSIP'
 
+DEBUG_TRUNCATE_RESULTS = 32
+
 from twisted.python import log
 from twisted.python.failure import Failure
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
@@ -61,16 +63,15 @@ class RtxClient(LineReceiver):
 
     def __init__(self, rtx):
         self.rtx = rtx
-        self.halt_on_exception = bool(int(os.environ.get('TXTRADER_ENABLE_EXCEPTION_HALT', 0)))
 
     def lineReceived(self, data):
+
         try:
             self.rtx.gateway_receive(data)
-        except Exception as ex:
-            self.rtx.error_handler(repr(self), repr(ex))
+        except Exception as exc:
+            self.rtx.error_handler(repr(self), repr(exc))
             traceback.print_exc()
-            if self.halt_on_exception:
-                reactor.callLater(0, reactor.stop)
+            self.rtx.check_exception_halt(exc, self)
 
     def connectionMade(self):
         self.rtx.gateway_connect(self)
@@ -115,11 +116,11 @@ class API_Symbol(object):
         self.callback = init_callback
         self.clear()
         self.register()
-        self.api.debug(f"__init__({repr(self)}, {self.api}, {self.symbol} {client_id}, {init_callback})")
+        self.api.debug(f"{repr(self)}.__init__(..., {client_id}, {init_callback})")
         self.api_initial_request()
 
     def __del__(self):
-        self.api.debug(f"{self}.__del__()")
+        self.api.debug(f"__del__({self})")
         self.api_cancel_updates()
         self.deregister()
 
@@ -407,12 +408,12 @@ class API_Execution(object):
         self.api = api
         self.oid = oid
         self.callback = callback
-        self.api.debug(f"__init__({self}, {self.api}, {self.oid}, {self.callback})")
+        self.api.debug(f"{self}.__init__(..., {self.callback})")
         self.fids = DEFAULT_EXECUTION_FIELDS.split(',')
         self.fields = {}
 
     def __del__(self):
-        self.api.debug(f"{self}.__del__()")
+        self.api.debug(f"__del__({self})")
 
     def __repr__(self):
         return f"{__class__.__name__}<{hex(id(self))} {self.oid}>"
@@ -473,36 +474,54 @@ class API_Execution(object):
 
 class API_Update():
 
-    def __init__(self, fields, callback):
+    def __init__(self, api, symbol, fields, callback):
+        self.api = api
+        self.symbol = symbol
         self.fields = fields
         self.callback = callback
-        self.api.debug(f"__init__({self})")
+        self.api.debug(f"{self}.__init__(..., {callback})")
 
     def __del__(self):
-        self.api.debug(f"{self}.__del__()")
+        self.api.debug(f"__del__({self})")
 
     def __str__(self):
         return repr(self)
 
     def __repr__(self):
-        return f"{__class__.__name__}<{hex(id(self))} {len(self.fields)}>"
+        return f"{__class__.__name__}<{hex(id(self))} {self.symbol} {len(self.fields)}>"
 
 
 class API_Order_Update(API_Update):
 
-    def callback(symbol):
-        self.fields['cusip'] = symbol.cusip
-        self.fields['raw']['CUSIP'] = symbol.cusip
+    def __repr__(self):
+        return f"{__class__.__name__}<{hex(id(self))} {self.symbol} {len(self.fields)}>"
+
+    def run_callback(self):
+        symbol = self.api.symbols.get(self.symbol)
+        if symbol:
+            cusip = self.api.symbols[self.symbol].cusip
+        else:
+            cusip = ''
+        self.fields['cusip'] = cusip
+        self.fields['raw']['CUSIP'] = cusip
         if self.fields['updates']:
-            self.fields['updates'][0]['fields']['CUSIP'] = symbol.cusip
-        self.callback(self.fields)
+            self.fields['updates'][0]['fields']['CUSIP'] = cusip
+        self.callback(self.fields, mapped=True)
 
 
 class API_Execution_Update(API_Update):
 
-    def callback(symbol):
-        self.fields['CUSIP'] = symbol.cusip
-        self.callback(self.fields)
+    def __repr__(self):
+        return f"{__class__.__name__}<{hex(id(self))} {self.symbol} {len(self.fields)}>"
+
+    def run_callback(self):
+        symbol = self.api.symbols.get(self.symbol)
+        if symbol:
+            cusip = symbol.cusip
+        else:
+            cusip = ''
+        self.fields['CUSIP'] = cusip
+        self.callback(self.fields, mapped=True)
 
 
 class API_Update_Mapper():
@@ -511,15 +530,14 @@ class API_Update_Mapper():
         self.api = api
         self.symbol = symbol
         self.updates = []    # updates are API_Update
-        self.api.debug(f"__init__({self})")
-        assert not symbol in self.api.pending_mapper_lookups
+        self.api.debug(f"{self}.__init__(...)")
         self.api.pending_mapper_lookups[symbol] = self
 
     def __del__(self):
-        self.api.debug(f"{self}.__del__()")
+        self.api.debug(f"__del__({self})")
 
     def __repr__(self):
-        return f"{__class__.__name__}<{hex(id(self))} {self.symbol} {len(self.updates)}>"
+        return f"{__class__.__name__}<{hex(id(self))} {self.symbol} {self.updates if self.api.log_level==DEBUG else len(self.updates)}>"
 
     def add_update(self, update):
         self.updates.append(update)
@@ -531,22 +549,10 @@ class API_Update_Mapper():
 
     def handle_response(self, response):
         self.api.debug(f"{self} handle_response {response}")
-        assert self.symbol in self.api.symbols
-        assert self.api.symbols[self.symbol].cusip
-        response = json.loads(response)
-        assert type(response) == dict
-        assert 'cusip' in response
-        assert response['cusip']
-        assert response['symbol'] == self.symbol
-        assert self.api.pending_mapper_lookups[self.symbol] == self
-        cusip = self.api.get_cusip(self.symbol)
-        assert cusip
-
-        api_symbol = self.api.symbols[self.symbol]
         while len(self.updates):
             update = self.updates.pop(0)
             self.api.debug(f"{self} sending amended update: {update}")
-            update.callback(api_symbol)
+            update.run_callback()
         # remove the pending list entry (that contains self)
         self.api.pending_mapper_lookups.pop(self.symbol)
 
@@ -563,7 +569,7 @@ class API_Order(object):
         self.data = data
         self.origin = origin
         self.callback = callback
-        self.api.debug(f"__init__({self}, {self.api}, {self.oid}, {self.data}, {self.origin}, {self.callback})")
+        self.api.debug(f"{self}.__init__({self.oid}, {len(self.data)}, {self.origin}, {self.callback})")
         self.updates = []
         self.suborders = {}
         self.fields = {}
@@ -574,7 +580,7 @@ class API_Order(object):
         self.update(data, init=True)
 
     def __del__(self):
-        self.api.debug(f"{self}.__del__()")
+        self.api.debug(f"__del__({self})")
 
     def __repr__(self):
         return f"{__class__.__name__}<{hex(id(self))}>"
@@ -619,6 +625,9 @@ class API_Order(object):
                 order_id = 'unknown'
                 change = 'error'
 
+        if 'DISP_NAME' in data and not 'CUSIP' in data:
+            data['CUSIP'] = self.api.get_cusip(data['DISP_NAME'])
+
         if self.api.log_order_updates:
             self.api.output(f"ORDER_UPDATE: {data['TYPE']} {change} OID={self.oid} ORDER_ID={order_id}")
 
@@ -659,6 +668,7 @@ class API_Order(object):
         if 'ORIGINAL_ORDER_ID' in self.fields:
             self.fields['permid'] = self.fields['ORIGINAL_ORDER_ID']
         self.fields['symbol'] = self.fields['DISP_NAME']
+        self.fields['cusip'] = self.fields['CUSIP']
         self.fields['account'] = self.api.make_account(self.fields)
         self.fields['quantity'] = self.fields['VOLUME']
         self.fields['class'] = self.ticket
@@ -744,14 +754,14 @@ class API_Callback(object):
         self.callable = callable
         self.started = time.time()
         self.timeout = timeout or api.callback_timeout['DEFAULT']
-        self.api.debug(f"__init__({self}, {self.api}, {self.id}, {self.label}, {self.callable}, {self.timeout})")
+        self.api.debug(f"{self}.__init__(..., {self.id}, {self.label}, {self.callable}, {self.timeout})")
         self.expire = self.started + timeout
         self.done = False
         self.data = None
         self.expired = False
 
     def __del__(self):
-        self.api.debug(f"{self}.__del__()")
+        self.api.debug(f"__del__({self})")
 
     def __repr__(self):
         return f"{__class__.__name__}<{hex(id(self))} {self.label}>"
@@ -761,7 +771,7 @@ class API_Callback(object):
 
     def complete(self, results):
         """complete callback by calling callable function with value of results"""
-        self.api.debug(f"{self}.complete({results})")
+        self.api.debug(f"{self}.complete({repr(results)[:DEBUG_TRUNCATE_RESULTS]})")
         self.elapsed = time.time() - self.started
         if not self.done:
             ret = self.format_results(results)
@@ -775,7 +785,7 @@ class API_Callback(object):
             self.api.error_handler(
                 self.id, '%s completed after timeout: callback=%s elapsed=%.2f' % (self.label, f"{self}", self.elapsed)
             )
-            self.api.debug(f"{self} results={repr(results)}")
+            self.api.debug(f"{self} results={repr(results)[:DEBUG_TRUNCATE_RESULTS]}")
         self.api.record_callback_metrics(self.label, int(self.elapsed * 1000), self.expired)
 
     def check_expire(self):
@@ -797,7 +807,7 @@ class API_Callback(object):
     # TODO: all of these format_* really belong in the api class
 
     def format_results(self, results):
-        self.api.debug(f"{self} format_results {self.label} {results}")
+        self.api.debug(f"{self} format_results {self.label}")
         if self.label == 'account_data':
             results = self.format_account_data(results)
         elif self.label == 'positions':
@@ -828,7 +838,7 @@ class API_Callback(object):
 
             results = json.dumps(results)
 
-        self.api.debug(f'{self} returning {results}')
+        self.api.debug(f'{self} returning {repr(results)[:DEBUG_TRUNCATE_RESULTS]}')
         return results
 
     def format_account_data(self, rows):
@@ -896,8 +906,9 @@ class RTX_Connection(object):
         self.id = str(uuid1())
         self.service = service
         self.topic = topic
+        self.log_events = api.log_cxn_events
         self.key = '%s;%s' % (service, topic)
-        self.api.debug(f"__init__({self}, {api}, {service}, {topic})")
+        self.api.debug(f"{self}.__init__(...)")
         self.last_query = ''
         self.api.cxn_register(self)
         self.api.gateway_send('connect %s %s' % (self.id, self.key))
@@ -915,7 +926,7 @@ class RTX_Connection(object):
         self.update_ready()
 
     def __del__(self):
-        self.api.debug(f"{self}.__del__()")
+        self.api.debug(f"__del__({self})")
 
     def __repr__(self):
         return f"{__class__.__name__}<{hex(id(self))} {self.id} {self.key}>"
@@ -945,7 +956,8 @@ class RTX_Connection(object):
         self.update_ready()
 
     def handle_ack(self, data):
-        self.api.debug(f"{self} Ack Received: {data}")
+        if self.log_events:
+            self.api.info(f"{self} Ack Received: {data}")
         if self.ack_pending:
             if data == self.ack_pending:
                 self.ack_pending = None
@@ -959,7 +971,8 @@ class RTX_Connection(object):
             self.api.error_handler(self.id, 'Ack Unexpected: %s' % data)
 
     def handle_response(self, data):
-        self.api.debug('Connection Response: %s %s' % (self, data))
+        if self.log_events:
+            self.api.info('Connection Response: %s %s' % (self, data))
         if self.response_pending:
             self.response_rows.append(data['row'])
             if data['complete']:
@@ -977,7 +990,8 @@ class RTX_Connection(object):
             self.response_callback.complete(None)
 
     def handle_status(self, data):
-        self.api.debug('Connection Status: %s %s' % (self, data))
+        if self.log_events:
+            self.api.info('Connection Status: %s %s' % (self, data))
         if self.status_pending and data['msg'] == self.status_pending:
             # if update_handler is set (an Advise is active) then leave status_pending, because we'll
             # get sporadic OnOtherAck status messages mixed in with the update messages
@@ -1012,7 +1026,8 @@ class RTX_Connection(object):
             self.handle_response_failure()
 
     def handle_update(self, data):
-        self.api.debug(f"{self} Connection Update: {data}")
+        if self.log_events:
+            self.api.info(f"{self} Connection Update: {data}")
         if self.update_callback:
             self.update_callback.complete(data['row'])
             self.update_callback = None
@@ -1112,7 +1127,10 @@ class RTX_Connection(object):
             self.cmd = cmd
             if 'request' in cmd:
                 self.response_rows = []
-            ret = self.api.gateway_send('%s %s %s' % (cmd, self.id, args))
+            msg = f"{cmd} {self.id} {args}"
+            if self.log_events:
+                self.api.info(f"{self} send: {msg}")
+            ret = self.api.gateway_send(msg)
             self.ack_pending = expect_ack
             self.ack_callback = ack_callback
             self.response_pending = bool(response_callback)
@@ -1126,7 +1144,8 @@ class RTX_Connection(object):
                 self.api.error_handler(self.id, f"Failure: on_connect_action already exists: {self.on_connect_action}")
                 ret = False
             else:
-                self.api.debug(f"{self} storing on_connect_action {cmd}")
+                if self.log_events:
+                    self.api.info(f"{self} storing on_connect_action {cmd}")
                 self.on_connect_action = (
                     cmd, args, expect_ack, ack_callback, response_callback, expect_status, status_callback,
                     update_callback, update_handler
@@ -1143,7 +1162,7 @@ class RTX_LocalCallback(object):
         self.errback_handler = errback_handler
         cbname = self.callback_handler.__name__
         ebname = self.errback_handler.__name__ if self.errback_handler else 'None'
-        self.api.debug(f"__init__({self}, {self.api}, {cbname}, {ebname})")
+        self.api.debug(f"{self}.__init__(..., {cbname}, {ebname})")
 
     def __repr__(self):
         return f"{__class__.__name__}<{hex(id(self))}>"
@@ -1176,9 +1195,6 @@ class RTX(object):
         self.clients = set([])
         self.callback_timeout = {}
         self.init_config()
-        for t in TIMEOUT_TYPES:
-            self.callback_timeout[t] = int(self.config.get('TIMEOUT_%s' % t))
-            self.info('callback_timeout[%s] = %d' % (t, self.callback_timeout[t]))
         self.now = None
         self.feed_now = None
         self.trade_minute = -1
@@ -1274,6 +1290,12 @@ class RTX(object):
                     self.id, 'SECONDS_TICK disable disallowed outside of test mode; resetting to enabled'
                 )
                 self.enable_seconds_tick = True
+        for t in TIMEOUT_TYPES:
+            self.callback_timeout[t] = int(self.config.get('TIMEOUT_%s' % t))
+
+    def check_exception_halt(self, exc, caller):
+        if self.halt_on_exception:
+            self.force_disconnect(f'{repr(exc)} raised in {caller} with TXTRADER_ENABLE_EXCEPTION_HALT set')
 
     def flags(self):
         return {
@@ -1324,14 +1346,14 @@ class RTX(object):
             self.debug('{self} cxn_clear')
         self.idle_cxn.clear()
         for cxn in self.active_cxn.values():
-            self.error(f'clearing active {cxn} {cxn.last_query}')
+            self.warning(f'clearing active {cxn} {cxn.last_query}')
         self.active_cxn.clear()
         for symbol in self.symbols.values():
             if symbol.cxn_init:
-                self.error(f"clearing {symbol.symbol} init {cxn}")
+                self.warning(f"clearing {symbol.symbol} init {cxn}")
                 symbol.cxn_init = None
             if symbol.cxn_updates:
-                self.error(f"clearing {symbol.symbol} updates {cxn}")
+                self.warning(f"clearing {symbol.symbol} updates {cxn}")
                 symbol.cxn_updates = None
 
     def gateway_connect(self, protocol):
@@ -1361,7 +1383,7 @@ class RTX(object):
             self.output('<--TX[%d]--' % (len(msg)))
             hexdump(msg.encode())
         if self.log_api_messages:
-            self.output('<-- %s' % repr(msg).encode())
+            self.info(f"<-- {msg}")
         if self.gateway_sender:
             self.gateway_sender(('%s\n' % str(msg)).encode())
 
@@ -1471,29 +1493,30 @@ class RTX(object):
 
     def debug(self, msg):
         if self.log_level <= DEBUG:
-            log.msg(msg.encode())
+            log.msg(f"DEBUG: {msg}", logLevel=DEBUG)
 
     def info(self, msg):
         if self.log_level <= INFO:
-            log.msg(msg.encode())
+            log.msg(msg, logLevel=INFO)
 
     def warning(self, msg):
         if self.log_level <= WARNING:
-            log.msg(msg.encode())
+            log.msg(f"WARNING: {msg}", logLevel=WARNING)
 
     def error(self, msg):
         if self.log_level <= ERROR:
-            log.err(msg.encode())
+            log.msg(f"ERROR: {msg}", logLevel=ERROR)
 
     def critical(self, msg):
         if self.log_level <= CRITICAL:
-            log.err(msg.encode())
+            log.msg(f"CRITICAL: {msg}", logLevel=CRITICAL)
 
     def output(self, msg):
-        if 'error' in msg:
-            log.err(msg.encode())
+        if 'error' in msg.lower() or 'alert' in msg.lower():
+            level = ERROR
         else:
-            log.msg(msg.encode())
+            level = INFO
+        log.msg(msg, logLevel=level)
 
     def open_client(self, client):
         self.clients.add(client)
@@ -1596,54 +1619,55 @@ class RTX(object):
             ret = symbol.cusip
         return ret
 
-    def send_order_update(self, fields):
+    def send_order_update(self, fields, mapped=False):
         """send a rendered order out to clients"""
         self.debug(f"{self} send_order_update({fields})")
-        assert isinstance(fields, dict)
         symbol = fields['symbol']
         if not fields.get('cusip'):
-            self.debug(f"{self} order update is missing CUSIP, deferring until mapped...")
-            mapper = self.pending_mapper_lookups.get(symbol)
-            if not mapper:
-                mapper = API_Update_Mapper(self, symbol)
-            mapper.add_update(API_Order_Update(deepcopy(fields), self.send_order_update))
-        else:
-            _class = fields['class']
-            oid = fields['permid']
-            account = fields['account']
-            _type = fields['raw']['TYPE']
-            status = fields['status']
-            self.WriteAllClients(f"{_class}.{oid} {account} {_type} {status}", option_flag=f"{_class}-notification")
-            self.WriteAllClients(f"{_class}-data {account} {json.dumps(fields)}", option_flag=f"{_class}-data")
+            if mapped:
+                self.debug(f"{self} order update is still missing CUSIP after mapping, continuing...")
+            else:
+                self.debug(f"{self} order update is missing CUSIP, deferring until mapped...")
+                mapper = self.pending_mapper_lookups.get(symbol)
+                if not mapper:
+                    mapper = API_Update_Mapper(self, symbol)
+                mapper.add_update(API_Order_Update(self, symbol, deepcopy(fields), self.send_order_update))
+                return
+        _class = fields['class']
+        oid = fields['permid']
+        account = fields['account']
+        _type = fields['raw']['TYPE']
+        status = fields['status']
+        self.WriteAllClients(f"{_class}.{oid} {account} {_type} {status}", option_flag=f"{_class}-notification")
+        self.WriteAllClients(f"{_class}-data {json.dumps(fields)}", option_flag=f"{_class}-data")
 
-    def send_execution_update(self, fields):
+    def send_execution_update(self, fields, mapped=False):
         """send a rendered execution out to clients"""
         self.debug(f"{self} send_execution_update({fields})")
-        assert isinstance(fields, dict)
         symbol = fields['DISP_NAME']
         if not fields.get('CUSIP'):
-            self.debug(f"{self} execution update is missing CUSIP, deferring until mapped...")
-            mapper = self.pending_mapper_lookups.get(symbol)
-            if not mapper:
-                mapper = API_Update_Mapper(self, symbol)
-            mapper.add_update(Api_Execution_Update(deepcopy(fields), self.send_execution_update))
-        else:
-            self.debug(f"{self} execution update validated, sending to clients")
-            xid = fields['ORDER_ID']
-            oid = fields['ORIGINAL_ORDER_ID']
-            account = fields['ACCOUNT']
-            status = fields['CURRENT_STATUS']
-            self.WriteAllClients(f"execution.{xid} {account} {oid} {status}", option_flag='execution-notification')
-            self.WriteAllClients(f"execution-data {account} {json.dumps(fields)}", option_flag='execution-data')
+            if mapped:
+                self.debug(f"{self} execution update is still missing CUSIP after mapping, continuing...")
+            else:
+                self.debug(f"{self} execution update is missing CUSIP, deferring until mapped...")
+                mapper = self.pending_mapper_lookups.get(symbol)
+                if not mapper:
+                    mapper = API_Update_Mapper(self, symbol)
+                mapper.add_update(API_Execution_Update(self, symbol, deepcopy(fields), self.send_execution_update))
+                return
+        self.debug(f"{self} execution update validated, sending to clients")
+        xid = fields['ORDER_ID']
+        oid = fields['ORIGINAL_ORDER_ID']
+        account = fields['ACCOUNT']
+        status = fields['CURRENT_STATUS']
+        self.WriteAllClients(f"execution.{xid} {account} {oid} {status}", option_flag='execution-notification')
+        self.WriteAllClients(f"execution-data {json.dumps(fields)}", option_flag='execution-data')
 
     def make_account(self, row):
         return '%s.%s.%s.%s' % (row['BANK'], row['BRANCH'], row['CUSTOMER'], row['DEPOSIT'])
 
     def handle_accounts(self, rows):
-        if not isinstance(rows, list):
-            raise ValueError('rows must be list type')
-
-        if rows:
+        if isinstance(rows, list) and rows:
             self.accounts = list(set([self.make_account(row) for row in rows]))
             self.accounts.sort()
             self.initial_account_request_pending = False
@@ -1695,12 +1719,26 @@ class RTX(object):
         cxn.request(table, what, where, cb)
         cb_list.append(cb)
 
+    def is_startup_pending(self):
+        if self.initial_account_request_pending:
+            ret = True
+        elif self.initial_order_request_pending:
+            ret = True
+        elif self.initial_execution_request_pending:
+            ret = True
+        elif len(self.pending_mapper_lookups):
+            ret = True
+        else:
+            ret = False
+        return ret
+
     def EverySecond(self):
         if self.connected:
-            if self.initial_account_request_pending or self.initial_order_request_pending or self.initial_execution_request_pending:
+            if self.is_startup_pending():
                 self.initialized = False
             else:
                 if not self.initialized:
+                    self.output('Initialization complete.')
                     self.initialized = True
                     self.update_connection_status('Up')
 
@@ -1730,7 +1768,7 @@ class RTX(object):
         if self.log_client_messages:
             self.info(f"WriteAllClients: {self.channel}.{msg} option_flag={option_flag}")
         msg = str('%s.%s' % (self.channel, msg))
-        self.debug(f"self.clients=[{','.join([repr(c) for c in self.clients])}]")
+        self.debug(f"WriteAllClients clients=[{','.join([repr(c) for c in self.clients])}]")
         if option_flag:
             # only write to clients with flag set in their options
             client_set = set([c for c in self.clients if (isinstance(c, tcpserver) and c.options.get(option_flag))])
@@ -1738,7 +1776,7 @@ class RTX(object):
             # no flag, so write to all tcpserver clients
             client_set = set([c for c in self.clients if isinstance(c, tcpserver)])
 
-        self.debug(f"client_set=[{','.join([repr(c) for c in client_set])}]")
+        self.debug(f"WriteAllClients: selected=[{','.join([repr(c) for c in client_set])}]")
         for c in client_set:
             c.sendString(msg.encode())
 

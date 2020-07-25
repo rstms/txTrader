@@ -2,10 +2,22 @@ FROM python:3.8.3-buster
 
 MAINTAINER mkrueger@rstms.net
 
-RUN pip install twisted ujson hexdump pytz tzlocal click pytest requests txtrader-client txtrader-monitor wait-for-it
+RUN pip install \
+  click \
+  hexdump \
+  pytest \ 
+  pytz \ 
+  requests \
+  twisted \ 
+  txtrader-client \
+  txtrader-monitor \ 
+  tzlocal \ 
+  ujson \
+  wait-for-it 
 
-RUN apt update -y
-RUN apt install -y vim less
+RUN apt-get update && apt-get install -y \
+  less \
+  vim
 
 RUN \
   echo 'America/Chicago' >/etc/timezone \

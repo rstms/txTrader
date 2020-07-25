@@ -57,7 +57,6 @@ class tcpserver(basic.NetstringReceiver):
         }
         self.authmap = set([])
         self.options = {}
-        self.halt_on_exception = bool(int(os.environ.get('TXTRADER_ENABLE_EXCEPTION_HALT', 0)))
 
     def stringReceived(self, line):
         line = line.decode().strip()
@@ -69,13 +68,12 @@ class tcpserver(basic.NetstringReceiver):
             if cmd in self.commands.keys():
                 try:
                     response = self.commands[cmd](line)
-                except Exception as ex:
-                    self.factory.api.error_handler(self, repr(ex))
+                except Exception as exc:
+                    self.factory.api.error_handler(self, repr(exc))
                     traceback.print_exc()
-                    response = f'.error: {repr(ex)}'
+                    response = f'.error: {repr(exc)}'
                     self.send(response)
-                    if self.halt_on_exception:
-                        reactor.callLater(0, reactor.stop)
+                    self.factory.api.check_exception_halt(exc, self)
                 else:
                     if response:
                         self.send(response)

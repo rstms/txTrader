@@ -385,7 +385,6 @@ class Leaf(Resource):
         self.log_request = log_request
         self.log_response = log_response
         self.require_init = require_init
-        self.halt_on_exception = bool(int(os.environ.get('TXTRADER_ENABLE_EXCEPTION_HALT',0)))
 
     def render(self, request):
         self.request = request
@@ -400,8 +399,7 @@ class Leaf(Resource):
                     return Resource.render(self, request)
                 except Exception as exc:
                     traceback.print_exc()
-                    if self.halt_on_exception:
-                        reactor.callLater(0, reactor.stop)
+                    self.root.api.check_exception_halt(exc, self)
         else:
             request.setResponseCode(http.UNAUTHORIZED)
             return json.dumps({'status': 'Unauthorized'}).encode()

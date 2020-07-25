@@ -5,8 +5,8 @@ build: fmt
 	docker-compose build 
 
 # run the service locally
-run: 
-	docker-compose up --build txtrader 
+run:
+	docker-compose run --rm --service-ports txtrader | tee log
 
 # start the service locally in the background
 start:
@@ -26,10 +26,10 @@ test: build
 
 # start a shell in the container with the dev directory bind-mounted
 shell:
-	docker-compose run --rm -p 50080:50080 -p 50090:50090 -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader /bin/bash -l
+	docker-compose run --rm --service-ports -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader /bin/bash -l
 
 debug: build
-	docker-compose run --rm -p 50080:50080 -p 50090:50090 -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader /bin/bash -l -c "txtraderd --debug"
+	docker-compose run --rm --service-ports -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader /bin/bash -l -c "txtraderd --debug"
 
 monitor:
 	docker-compose run -e TXTRADER_HOST txtrader bash -l -c txtrader_monitor
