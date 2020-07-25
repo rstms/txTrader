@@ -68,3 +68,4 @@ notes
 .docker
 .dockerhub
 txtrader/revision.py
+log

@@ -27,11 +27,12 @@ RUN \
 RUN useradd -m txtrader
 USER txtrader
 WORKDIR /home/txtrader
-RUN mkdir -p /home/txtrader/.local/bin
+COPY txtrader /home/txtrader/txtrader
 COPY setup.py /home/txtrader
 COPY pytest.ini /home/txtrader
-COPY txtrader /home/txtrader/txtrader
 COPY tests /home/txtrader/tests
+RUN mkdir -p /home/txtrader/.local/bin
 RUN pip install . --user --no-warn-script-location
 
-CMD ["bash", "-l", "-c", "txtraderd"]
+ENTRYPOINT ["/usr/local/bin/twistd"]
+CMD ["--nodaemon", "--reactor=epoll",  "--logfile=-",  "--pidfile=", "--python=/home/txtrader/txtrader/txtrader.tac"]

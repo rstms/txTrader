@@ -1838,7 +1838,7 @@ class RTX(object):
                 code = 'Field Reset'
             else:
                 code = 'Unknown Field Error'
-            self.error(f'{self} Field Parse Failure: {label} {data}={code}')
+            self.warning(f'{self} Field Parse Failure: {label} {data}={code}')
             ret = None
         else:
             ret = data
