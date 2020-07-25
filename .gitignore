@@ -67,3 +67,4 @@ notes
 .tox
 .docker
 .dockerhub
+txtrader/revision.py

@@ -27,6 +27,8 @@ from copy import deepcopy
 
 from txtrader.config import Config
 from txtrader.tcpserver import tcpserver
+from txtrader.version import HEADER
+from txtrader.revision import REVISION
 
 from logging import getLevelName, DEBUG, INFO, WARNING, ERROR, CRITICAL
 import traceback
@@ -457,7 +459,7 @@ class API_Execution(object):
             self.api.error_handler(self.oid, f"Execution Update ORDER_ID mismatch: {repr(data)}")
 
         if self.api.log_execution_updates:
-            self.api.output(f"EXECUTION_UPDATE: {data['TYPE']} OID={self.oid} ORDER_ID={order_id}")
+            self.api.info(f"Update: {data['TYPE']} XID={self.oid} OID={order_id}")
 
     def render(self):
         self.api.debug(f"{self} render")
@@ -629,7 +631,7 @@ class API_Order(object):
             data['CUSIP'] = self.api.get_cusip(data['DISP_NAME'])
 
         if self.api.log_order_updates:
-            self.api.output(f"ORDER_UPDATE: {data['TYPE']} {change} OID={self.oid} ORDER_ID={order_id}")
+            self.api.info(f"Update: {data['TYPE']} {change} OID={self.oid} ORDER_ID={order_id}")
 
         # only apply new or changed messages to the base order; (don't move order status back in time when refresh happens)
 
@@ -644,10 +646,10 @@ class API_Order(object):
             if changes:
                 update_type = data['TYPE'] if 'TYPE' in data else 'Undefined'
                 if self.api.log_order_updates:
-                    self.api.output(f"ORDER_CHANGES: {update_type} OID={self.oid} ORDER_ID={order_id} {repr(changes)}")
+                    self.api.debug(f"ORDER_CHANGES: {update_type} OID={self.oid} ORDER_ID={order_id} {repr(changes)}")
 
                     unchanged_fields = {k: v for k, v in data.items() if not k in changes}
-                    self.api.output(f"UNCHANGED_FIELDS: {unchanged_fields}")
+                    self.api.debug(f"UNCHANGED_FIELDS: {unchanged_fields}")
                 self.updates.append({'id': order_id, 'type': update_type, 'fields': changes, 'time': time.time()})
 
         if not init:
@@ -1186,7 +1188,8 @@ class RTX_LocalCallback(object):
 class RTX(object):
 
     def __init__(self):
-        self.output('RTX init')
+        self.output(HEADER)
+        self.output(REVISION)
         self.label = 'RTX Gateway'
         self.channel = 'rtx'
         self.id = 'RTX'

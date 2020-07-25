@@ -21,4 +21,3 @@ VERSION = '%s.%s.%s' % (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH)
 DATETIME = '%s %s' % (DATE, TIME)
 LABEL = 'TxTrader Securities Trading API Controller'
 HEADER = '%s %s (build %s) %s' % (LABEL, VERSION, BUILD, DATETIME)
-COMMIT = 'commit c9560b202a288e7abec68580d87126d41ea39f6f'

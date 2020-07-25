@@ -1,7 +1,8 @@
 # txTrader makefile
-#
+
 
 build: fmt
+	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
 	docker-compose build 
 
 # run the service locally
@@ -36,7 +37,7 @@ monitor:
 
 # tail the log of any running txtrader container
 tail:
-	while true; do (docker ps -q --filter name=txtrader | xargs -r docker logs --follow); sleep 3; done
+	@while true; do (docker ps -q --filter name=txtrader | xargs -r docker logs --follow); echo -n '.'; sleep 3; done
 
 # yapf format all changed python sources
 fmt: .fmt
