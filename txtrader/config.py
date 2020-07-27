@@ -30,6 +30,8 @@ defaults = {
     "ENABLE_SECONDS_TICK": 1,
     "ENABLE_TICKER": 0,
     "ENABLE_EXCEPTION_HALT": 0,
+    "ENABLE_AUTO_RESET": 0,
+    "LOCAL_RESET_TIME": "05:00",
     "GET_BACKOFF_FACTOR": .1,
     "GET_RETRIES": 8,
     "HOST": "127.0.0.1",

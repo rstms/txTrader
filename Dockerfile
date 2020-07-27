@@ -34,5 +34,6 @@ COPY tests /home/txtrader/tests
 RUN mkdir -p /home/txtrader/.local/bin
 RUN pip install . --user --no-warn-script-location
 
-ENTRYPOINT ["/usr/local/bin/twistd"]
-CMD ["--nodaemon", "--reactor=epoll",  "--logfile=-",  "--pidfile=", "--python=/home/txtrader/txtrader/txtrader.tac"]
+COPY entrypoint.sh /home/txtrader
+COPY txtrader/txtrader.tac /home/txtrader
+ENTRYPOINT ["/bin/sh", "entrypoint.sh"]

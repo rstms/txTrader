@@ -854,7 +854,7 @@ class API_Callback(object):
         positions = {}
         [positions.setdefault(a, {}) for a in self.api.accounts]
         #print('format_positions: rows=%s' % repr(rows))
-        for pos in rows:
+        for pos in rows or []:
             if pos:
                 #print('format_positions: pos=%s' % repr(pos))
                 account = self.api.make_account(pos)
@@ -883,7 +883,7 @@ class API_Callback(object):
         else:
             results = {}
             for k, v in self.api.orders.items():
-                # don't return staged order tickets
+                # return either tickets or orders based on _filter value
                 if v.ticket == _filter:
                     results[k] = v.render()
         return json.dumps(results)
@@ -1282,6 +1282,10 @@ class RTX(object):
         self.log_execution_updates = bool(int(self.config.get('LOG_EXECUTION_UPDATES')))
         self.log_callback_metrics = bool(int(self.config.get('LOG_CALLBACK_METRICS')))
         self.log_level = int(getLevelName(self.config.get('LOG_LEVEL')))
+        self.time_offset = int(self.config.get('TIME_OFFSET'))
+        self.enable_auto_reset = bool(int(self.config.get('ENABLE_AUTO_RESET')))
+        self.local_reset_time = self.config.get('LOCAL_RESET_TIME')
+        self.auto_reset_trigger = False
         self.time_offset = int(self.config.get('TIME_OFFSET'))
         # verify test mode in any of three ways
         if not ('test' in gethostname() or self.config.get('TESTING') or bool(int(os.environ.get('TESTING', 0)))):
@@ -1759,12 +1763,25 @@ class RTX(object):
                     )
         self.CheckPendingResults()
 
+        if self.enable_auto_reset:
+            self.check_auto_reset()
+
         if not int(time.time()) % 60:
             self.EveryMinute()
 
     def EveryMinute(self):
         if self.callback_metrics and self.log_callback_metrics:
             self.output('callback_metrics: %s' % json.dumps(self.callback_metrics))
+
+    def check_auto_reset(self):
+        if time.strftime('%H:%M') == self.local_reset_time:
+            if not self.auto_reset_trigger:
+                self.auto_reset_trigger = True
+                self.warning(f"auto_shutdown in 1 minute: TXTRADER_ENABLE_AUTO_RESET={self.enable_auto_reset} TXTRADER_LOCAL_RESET_TIME={self.local_reset_time}")
+        else:
+            if self.auto_reset_trigger:
+                self.force_disconnect('auto reset')
+
 
     def WriteAllClients(self, msg, option_flag=None):
         # if a client list is given, only write to that list, otherwise default to all clients

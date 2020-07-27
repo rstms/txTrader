@@ -23,7 +23,7 @@ restart: stop start
 # run the regression tests
 TPARM?=-svx
 test: build
-	docker-compose run --rm txtrader /bin/bash -c 'pytest ${TPARM} ${TESTS}'
+	docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
 
 # start a shell in the container with the dev directory bind-mounted
 shell:

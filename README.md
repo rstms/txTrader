@@ -108,6 +108,9 @@ TXTRADER_TIMEOUT_ORDER          | 300              | API timeout for query_order
 TXTRADER_TIMEOUT_ORDERSTATUS    | 3600             | API timeout for query_orders (all order data)
 TXTRADER_TIMEOUT_POSITION       | 20               | API timeout for query_position
 TXTRADER_TIMEOUT_TIMER          | 10               | API timeout for internal timer tick request
+TXTRADER_ENABLE_AUTO_RESET      | 1                | timed automatic shutdown if enabled
+TXTRADER_LOCAL_RESET_TIME       | "05:00"          | time for automatic shutdown in HH:MM format (local system time)
+
 
 
 Security
