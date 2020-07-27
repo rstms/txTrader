@@ -93,8 +93,8 @@ docker: .docker
 .docker: pypi
 	@echo building docker image
 	docker images | awk '/^${ORG}\/${PROJECT_NAME}/{print $$3}' | xargs -r -n 1 docker rmi -f
-	docker build . --tag ${ORG}/${PROJECT_NAME}:$(shell cat VERSION)
-	docker build . --tag ${ORG}/${PROJECT_NAME}:latest
+	docker build dockerhub --tag ${ORG}/${PROJECT_NAME}:$(shell cat VERSION)
+	docker build dockerhub --tag ${ORG}/${PROJECT_NAME}:latest
 	@touch $@
 
 dockerhub: .dockerhub

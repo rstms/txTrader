@@ -18,6 +18,9 @@ if sys.version_info < (3, 7):
 
 from txtrader import VERSION, LABEL
 
+with open('requirements.txt') as ifp:
+    install_requires = ifp.read().strip().split('\n')
+
 setup(
     name='txTrader',
     version=VERSION,
@@ -27,9 +30,7 @@ setup(
     url='https://github.com/rstms/txTrader',
     license='MIT',
     packages=find_packages(exclude=('tests', 'docs')),
-    install_requires=[
-        'twisted', 'ujson', 'hexdump', 'pytz', 'tzlocal', 'Click', 'txtrader-client', 'txtrader-monitor', 'wait-for-it'
-    ],
+    install_requires=install_requires,
     tests_require=['pytest', 'requests'],
     entry_points={'console_scripts': ['txtraderd=txtrader.daemon:txtraderd']},
     include_package_data=True,
