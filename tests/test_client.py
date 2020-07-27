@@ -29,6 +29,11 @@ QUERY_ACCOUNT_ITERS = 10
 def api():
     api = API(test_mode)
     assert api
+    start = time.time()
+    while api.status() != 'Up':
+        assert (time.time() - start) < 60, "timeout waiting for api initialization"
+        time.sleep(1)
+
     print('\ntxtrader client connected: %s' % api)
     yield api
 

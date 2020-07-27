@@ -21,8 +21,7 @@ import sys
 import os
 from datetime import datetime
 import ujson as json
-from txtrader.version import HEADER
-from txtrader.revision import REVISION
+from txtrader import HEADER, REVISION
 import traceback
 
 USABLE_BEFORE_INIT = ['status', 'uptime', 'version', 'help', 'shutdown']

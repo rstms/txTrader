@@ -27,8 +27,8 @@ from copy import deepcopy
 
 from txtrader.config import Config
 from txtrader.tcpserver import tcpserver
-from txtrader.version import HEADER
-from txtrader.revision import REVISION
+from txtrader import HEADER
+from txtrader import REVISION
 
 from logging import getLevelName, DEBUG, INFO, WARNING, ERROR, CRITICAL
 import traceback
@@ -531,7 +531,7 @@ class API_Update_Mapper():
     def __init__(self, api, symbol):
         self.api = api
         self.symbol = symbol
-        self.updates = []    # updates are API_Update
+        self.updates = []  # updates are API_Update
         self.api.debug(f"{self}.__init__(...)")
         self.api.pending_mapper_lookups[symbol] = self
 
@@ -1230,6 +1230,7 @@ class RTX(object):
         self.initial_account_request_pending = True
         self.initial_order_request_pending = True
         self.initial_execution_request_pending = True
+        self.initial_update_mapper_pending = True
         self.timer_callbacks = []
         self.last_connection_status = ''
         self.connection_status = 'Startup'
@@ -1320,7 +1321,7 @@ class RTX(object):
         m['tot'] += 1
         m['min'] = min(m['min'], elapsed)
         m['max'] = max(m['max'], elapsed)
-        m['avg'] = (m['avg'] * total + elapsed) / (total+1)
+        m['avg'] = (m['avg'] * total + elapsed) / (total + 1)
         m['exp'] += int(expired)
         m['hst'].append(elapsed)
         if len(m['hst']) > CALLBACK_METRIC_HISTORY_LIMIT:
@@ -1375,10 +1376,12 @@ class RTX(object):
             self.gateway_protocol = None
             self.gateway_transport = None
             self.connected = False
+            self.initialized = False
             self.seconds_disconnected = 0
             self.initial_account_request_pending = False
             self.initial_order_request_pending = False
             self.initial_execution_request_pending = False
+            self.initial_update_mapper_pending = False
             self.accounts = None
             self.update_connection_status('Disconnected')
             self.error_handler(self.id, 'API Disconnected')
@@ -1479,6 +1482,7 @@ class RTX(object):
         self.initial_account_request_pending = True
         self.initial_order_request_pending = True
         self.initial_execution_request_pending = True
+        self.initial_update_mapper_pending = True
         self.initialized = False
 
     def handle_initial_account_failure(self, message):
@@ -1726,28 +1730,27 @@ class RTX(object):
         cxn.request(table, what, where, cb)
         cb_list.append(cb)
 
-    def is_startup_pending(self):
+    def is_startup_complete(self):
+        startup_complete = False
         if self.initial_account_request_pending:
-            ret = True
+            self.output('awaiting initial account response...')
         elif self.initial_order_request_pending:
-            ret = True
+            self.output('awaiting initial order response...')
         elif self.initial_execution_request_pending:
-            ret = True
+            self.output('awaiting initial execution response...')
         elif len(self.pending_mapper_lookups):
-            ret = True
+            self.output('awaiting initial update mapper lookups...')
         else:
-            ret = False
-        return ret
+            startup_complete = True
+        return startup_complete
 
     def EverySecond(self):
         if self.connected:
-            if self.is_startup_pending():
-                self.initialized = False
-            else:
-                if not self.initialized:
+            if not self.initialized:
+                if self.is_startup_complete():
+                    self.initialized = True
                     self.output('Initialization complete.')
                     self.update_connection_status('Up')
-                    self.initialized = True
 
             if self.enable_seconds_tick:
                 self.rtx_request(
@@ -1777,11 +1780,12 @@ class RTX(object):
         if time.strftime('%H:%M') == self.local_reset_time:
             if not self.auto_reset_trigger:
                 self.auto_reset_trigger = True
-                self.warning(f"auto_shutdown in 1 minute: TXTRADER_ENABLE_AUTO_RESET={self.enable_auto_reset} TXTRADER_LOCAL_RESET_TIME={self.local_reset_time}")
+                self.warning(
+                    f"auto_shutdown in 1 minute: TXTRADER_ENABLE_AUTO_RESET={self.enable_auto_reset} TXTRADER_LOCAL_RESET_TIME={self.local_reset_time}"
+                )
         else:
             if self.auto_reset_trigger:
                 self.force_disconnect('auto reset')
-
 
     def WriteAllClients(self, msg, option_flag=None):
         # if a client list is given, only write to that list, otherwise default to all clients
@@ -1918,10 +1922,11 @@ class RTX(object):
     def create_staged_order_ticket(self, account, callback):
 
         if not self.verify_account(account):
-            API_Callback(self, 0, 'create_staged_order_ticket', callback).complete({
-                'status': 'Error',
-                'errorMsg': 'account unknown'
-            })
+            API_Callback(self, 0, 'create_staged_order_ticket',
+                         callback).complete({
+                             'status': 'Error',
+                             'errorMsg': 'account unknown'
+                         })
             return
 
         o = OrderedDict({})
@@ -1934,7 +1939,7 @@ class RTX(object):
         tid = 'T-%s' % self.create_order_id()
         o['CLIENT_ORDER_ID'] = tid
         o['DISP_NAME'] = 'N/A'
-        o['STYP'] = RTX_STYPE    # stock
+        o['STYP'] = RTX_STYPE  # stock
         o['EXIT_VEHICLE'] = 'NONE'
         o['TYPE'] = 'UserSubmitStagedOrder'
 
@@ -1966,10 +1971,11 @@ class RTX(object):
         self, account, route, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None
     ):
         if not self.initialized:
-            API_Callback(self, 0, 'submit_order', callback).complete({
-                'status': 'Error',
-                'errorMsg': 'gateway not initialized'
-            })
+            API_Callback(self, 0, 'submit_order',
+                         callback).complete({
+                             'status': 'Error',
+                             'errorMsg': 'gateway not initialized'
+                         })
             return
 
         if not self.verify_account(account):
@@ -1990,9 +1996,9 @@ class RTX(object):
         o['CUSTOMER'] = customer
         o['DEPOSIT'] = deposit
 
-        o['BUYORSELL'] = 'Buy' if quantity > 0 else 'Sell'    # Buy Sell SellShort
+        o['BUYORSELL'] = 'Buy' if quantity > 0 else 'Sell'  # Buy Sell SellShort
         o['quantity'] = quantity
-        o['GOOD_UNTIL'] = 'DAY'    # DAY or YYMMDDHHMMSS
+        o['GOOD_UNTIL'] = 'DAY'  # DAY or YYMMDDHHMMSS
         route = list(self.order_route.keys())[0]
         o['EXIT_VEHICLE'] = route
 
@@ -2005,7 +2011,7 @@ class RTX(object):
                 o[k] = v
 
         o['DISP_NAME'] = symbol
-        o['STYP'] = RTX_STYPE    # stock
+        o['STYP'] = RTX_STYPE  # stock
 
         if symbol in self.primary_exchange_map:
             exchange = self.primary_exchange_map[symbol]
@@ -2081,10 +2087,11 @@ class RTX(object):
         self.output('cancel_order %s' % oid)
 
         if not self.initialized:
-            API_Callback(self, 0, 'cancel_order', callback).complete({
-                'status': 'Error',
-                'errorMsg': 'gateway not initialized'
-            })
+            API_Callback(self, 0, 'cancel_order',
+                         callback).complete({
+                             'status': 'Error',
+                             'errorMsg': 'gateway not initialized'
+                         })
             return
 
         cb = API_Callback(self, oid, 'cancel_order', callback, self.callback_timeout['ORDER'])
@@ -2325,14 +2332,16 @@ class RTX(object):
                 bar_end.year, bar_end.month, bar_end.day, session_stop.hour, session_stop.minute, 0
             )
 
-        where = ','.join([
-            "DISP_NAME='%s'" % symbol,
-            "BARINTERVAL=%d" % interval,
-            "STARTDATE='%s'" % bar_start.strftime('%Y/%m/%d'),
-            "CHART_STARTTIME='%s'" % bar_start.strftime('%H:%M'),
-            "STOPDATE='%s'" % bar_end.strftime('%Y/%m/%d'),
-            "CHART_STOPTIME='%s'" % bar_end.strftime('%H:%M'),
-        ])
+        where = ','.join(
+            [
+                "DISP_NAME='%s'" % symbol,
+                "BARINTERVAL=%d" % interval,
+                "STARTDATE='%s'" % bar_start.strftime('%Y/%m/%d'),
+                "CHART_STARTTIME='%s'" % bar_start.strftime('%H:%M'),
+                "STOPDATE='%s'" % bar_end.strftime('%Y/%m/%d'),
+                "CHART_STOPTIME='%s'" % bar_end.strftime('%H:%M'),
+            ]
+        )
 
         #print('barchart where=%s' % repr(where))
 

@@ -16,7 +16,7 @@ from setuptools import setup, find_packages
 if sys.version_info < (3, 7):
     sys.exit('Python < 3.7 is not supported')
 
-from txtrader.version import VERSION, LABEL
+from txtrader import VERSION, LABEL
 
 setup(
     name='txTrader',

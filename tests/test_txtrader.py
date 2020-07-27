@@ -33,23 +33,35 @@ def _listening(host, port, timeout=15):
     return not bool(os.system(f'wait-for-it -s {host}:{port} -t {timeout}'))
 
 
+def _wait_api_status(_api):
+    start = time.time()
+    status = None
+    last_status = None
+    while status != 'Up':
+        status = _api.status()
+        if last_status != status:
+            print(f"status={status}")
+            last_status = status
+        assert (time.time() - start) < 65, 'timeout waiting for initialization'
+        time.sleep(1)
+
+
 @pytest.fixture(scope='module')
 def api():
-    api = API(testmode)
-    host = api.config['TXTRADER_HOST']
-    port = int(api.config['TXTRADER_HTTP_PORT'])
+    host = os.environ['TXTRADER_HOST']
+    port = int(os.environ['TXTRADER_HTTP_PORT'])
     assert _listening(host, port)
     shutdown_time = time.time()
-    api.shutdown('testing shutdown request')
-    time.sleep(3)
-    assert _listening(host, port, 15), 'timeout waiting for restart'
     api = API(testmode)
-    status = None
-    while status != 'Up':
-        status = api.status()
-        print(f"status={status}")
-        assert (time.time() - shutdown_time) < 65, 'timeout waiting for initialization'
-
+    _wait_api_status(api)
+    shutdown = time.time()
+    print('shutting down api')
+    api.shutdown('testing shutdown request')
+    time.sleep(5)
+    print('waiting for restart...')
+    assert _listening(host, port, 30), 'timeout waiting for restart'
+    api = API(testmode)
+    _wait_api_status(api)
     yield api
 
 
@@ -61,6 +73,7 @@ def test_init(api):
     print()
     print('test_init checking api')
     assert api
+    assert api.status() == 'Up'
     print('waiting 1 second...')
     time.sleep(1)
     print('done')

@@ -11,7 +11,7 @@
 
 """
 
-from txtrader.version import VERSION, DATE, LABEL
+from txtrader import VERSION, DATE, LABEL
 
 import sys
 import os
