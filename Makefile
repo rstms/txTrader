@@ -2,7 +2,7 @@
 
 ORG:=rstms
 PROJECT:=$(shell basename `pwd` | tr - _ | tr [A-Z] [a-z])
-PROJECT_NAME:=$(shell basename `pwd`)
+PROJECT_NAME:=$(shell basename `pwd` | tr [A-Z] [a-z])
 
 PYTHON=python3
 
