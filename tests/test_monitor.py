@@ -23,20 +23,14 @@ test_password = os.environ['TXTRADER_PASSWORD']
 
 
 def _listening(timeout=1):
-    return bool(os.system(f'wait-for-it -s {test_host}:{test_port} -t {timeout}'))
+    return not bool(os.system(f'wait-for-it -s {test_host}:{test_port} -t {timeout}'))
 
 
 @pytest.fixture(scope='module')
 def server():
     print()
-
-    print('waiting for server to be listening')
     # wait up to 15 seconds for server to be listening
-    start = time.time()
-    while not _listening():
-        assert time.time() - start < 15, "timed out waiting for server"
-    assert _listening(), 'server should be listening'
-
+    assert _listening(15), 'server should be listening'
     yield True
 
 

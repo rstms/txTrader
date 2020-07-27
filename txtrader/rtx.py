@@ -1746,8 +1746,8 @@ class RTX(object):
             else:
                 if not self.initialized:
                     self.output('Initialization complete.')
-                    self.initialized = True
                     self.update_connection_status('Up')
+                    self.initialized = True
 
             if self.enable_seconds_tick:
                 self.rtx_request(
