@@ -170,9 +170,7 @@ class API_Symbol(object):
         self.cxn_updates = None
         self.cxn_init = self.api.cxn_get('TA_SRV', 'LIVEQUOTE')
         init_callback = RTX_LocalCallback(self.api, self.init_handler, self.init_failed)
-        cb = API_Callback(
-            self.api, self.cxn_init.id, 'init_symbol', init_callback, self.api.callback_timeout['ADDSYMBOL']
-        )
+        cb = API_Callback(self.api, self.cxn_init.id, 'init_symbol', init_callback, self.api.callback_timeout['ADDSYMBOL'])
         self.cxn_init.request('LIVEQUOTE', '*', f"DISP_NAME='{self.symbol}'", cb)
 
     def api_request_updates(self):
@@ -288,9 +286,7 @@ class API_Symbol(object):
 
     def barchart_init_failed(self, error):
         self.api.error(f"{self} barchart_init_failed({error})")
-        self.api.error_handler(
-            f"{self}", 'Initial BARCHART query failed for symbol %s: %s' % (self.symbol, repr(error))
-        )
+        self.api.error_handler(f"{self}", 'Initial BARCHART query failed for symbol %s: %s' % (self.symbol, repr(error)))
 
     def barchart_query_failed(self, error):
         self.api.error(f"{self} barchart_query_failed")
@@ -627,8 +623,17 @@ class API_Order(object):
         if 'DISP_NAME' in data and not 'CUSIP' in data:
             data['CUSIP'] = self.api.get_cusip(data['DISP_NAME'])
 
+        # default to display only in debug mode
+        display_func = self.api.debug
         if self.api.log_order_updates:
-            self.api.output(f"ORDER: {data['TYPE']} {change} OID={self.oid} ORDER_ID={order_id}")
+            # if selected, output updates
+            display_func = self.api.output
+            # handle dups differently
+            if change == 'dup':
+                if not self.api.log_order_update_dups:
+                    # if log dups is not selected, stay at debug default
+                    display_func = self.api.debug
+        display_func(f"ORDER: {data['TYPE']} {change} OID={self.oid} ORDER_ID={order_id}")
 
         # only apply new or changed messages to the base order; (don't move order status back in time when refresh happens)
 
@@ -730,8 +735,8 @@ class API_Order(object):
 
     def is_cancelled(self):
         return bool(
-            self.fields['CURRENT_STATUS'] == 'COMPLETED' and 'status' in self.fields
-            and self.fields['status'] == 'Error' and 'REASON' in self.fields and self.fields['REASON'] == 'User cancel'
+            self.fields['CURRENT_STATUS'] == 'COMPLETED' and 'status' in self.fields and self.fields['status'] == 'Error'
+            and 'REASON' in self.fields and self.fields['REASON'] == 'User cancel'
         )
 
     def has_fill_type(self):
@@ -825,9 +830,9 @@ class API_Callback(object):
             results = self.format_executions(results, xid=self.id)
         elif self.label == 'barchart':
             results = self.api.format_barchart(results)
-        elif self.label in ['new_symbol', 'order', 'ticket', 'unadvise', 'add_symbol', 'submit_order',
-                            'request_accounts', 'get_order_route', 'set_account', 'create_staged_order_ticket',
-                            'query_bars_failed', 'cancel_order', 'global_cancel']:
+        elif self.label in ['new_symbol', 'order', 'ticket', 'unadvise', 'add_symbol', 'submit_order', 'request_accounts',
+                            'get_order_route', 'set_account', 'create_staged_order_ticket', 'query_bars_failed', 'cancel_order',
+                            'global_cancel']:
             results = json.dumps(results)
         elif self.label in ['init_symbol', 'tick', 'accounts', 'order-ack', 'ticket-ack']:
             # no local formatting for these labels
@@ -935,8 +940,8 @@ class RTX_Connection(object):
 
     def update_ready(self):
         self.ready = not (
-            self.ack_pending or self.response_pending or self.status_pending or self.status_callback
-            or self.update_callback or self.update_handler
+            self.ack_pending or self.response_pending or self.status_pending or self.status_callback or self.update_callback
+            or self.update_handler
         )
         if self.ready:
             self.api.cxn_activate(self)
@@ -1008,9 +1013,7 @@ class RTX_Connection(object):
                         self.api.debug(f"{self} sending on_connect_action: {self.on_connect_action}")
                         self.send(cmd, arg, exa, cba, cbr, exs, cbs, cbu, uhr)
                         self.on_connect_action = None
-                        self.api.debug(
-                            f"{self} after on_connect_action send: self.status_pending={self.status_pending}"
-                        )
+                        self.api.debug(f"{self} after on_connect_action send: self.status_pending={self.status_pending}")
 
                 if self.status_callback:
                     self.status_callback.complete(data)
@@ -1081,25 +1084,14 @@ class RTX_Connection(object):
         # force ready state so the unadvise command will be sent
         self.ready = True
         return self.query(
-            'unadvise',
-            table,
-            what,
-            where,
-            expect_ack='UNADVISE_OK',
-            expect_status='OnOtherAck',
-            status_callback=callback
+            'unadvise', table, what, where, expect_ack='UNADVISE_OK', expect_status='OnOtherAck', status_callback=callback
         )
 
     def poke(self, table, what, where, data, ack_callback, callback):
         tql = '%s;%s;%s!%s' % (table, what, where, data)
         self.last_query = 'poke: %s' % tql
         return self.send(
-            'poke',
-            tql,
-            expect_ack="POKE_OK",
-            ack_callback=ack_callback,
-            expect_status='OnOtherAck',
-            status_callback=callback
+            'poke', tql, expect_ack="POKE_OK", ack_callback=ack_callback, expect_status='OnOtherAck', status_callback=callback
         )
 
     def execute(self, command, callback):
@@ -1146,8 +1138,8 @@ class RTX_Connection(object):
                 if self.log_events:
                     self.api.info(f"{self} storing on_connect_action {cmd}")
                 self.on_connect_action = (
-                    cmd, args, expect_ack, ack_callback, response_callback, expect_status, status_callback,
-                    update_callback, update_handler
+                    cmd, args, expect_ack, ack_callback, response_callback, expect_status, status_callback, update_callback,
+                    update_handler
                 )
                 ret = True
         return ret
@@ -1276,7 +1268,9 @@ class RTX(object):
         self.log_client_messages = bool(int(self.config.get('LOG_CLIENT_MESSAGES')))
         self.log_http_requests = bool(int(self.config.get('LOG_HTTP_REQUESTS')))
         self.log_http_responses = bool(int(self.config.get('LOG_HTTP_RESPONSES')))
+        self.log_response_truncate = int(self.config.get('LOG_RESPONSE_TRUNCATE'))
         self.log_order_updates = bool(int(self.config.get('LOG_ORDER_UPDATES')))
+        self.log_order_update_dups = bool(int(self.config.get('LOG_ORDER_UPDATE_DUPS')))
         self.log_execution_updates = bool(int(self.config.get('LOG_EXECUTION_UPDATES')))
         self.log_callback_metrics = bool(int(self.config.get('LOG_CALLBACK_METRICS')))
         self.log_level = int(getLevelName(self.config.get('LOG_LEVEL')))
@@ -1291,9 +1285,7 @@ class RTX(object):
                 self.error_handler(self.id, 'TIME_OFFSET disallowed outside of test mode; resetting to 0')
                 self.time_offset = 0
             if not self.enable_seconds_tick:
-                self.error_handler(
-                    self.id, 'SECONDS_TICK disable disallowed outside of test mode; resetting to enabled'
-                )
+                self.error_handler(self.id, 'SECONDS_TICK disable disallowed outside of test mode; resetting to enabled')
                 self.enable_seconds_tick = True
         for t in TIMEOUT_TYPES:
             self.callback_timeout[t] = int(self.config.get('TIMEOUT_%s' % t))
@@ -1451,8 +1443,8 @@ class RTX(object):
         self.output("Sending initial Accounts query...")
         what = '*'
         self.rtx_request(
-            'ACCOUNT_GATEWAY', 'ORDER', 'ACCOUNT', what, '', 'accounts', self.handle_accounts,
-            self.accountdata_callbacks, self.callback_timeout['ACCOUNT'], self.handle_initial_account_failure
+            'ACCOUNT_GATEWAY', 'ORDER', 'ACCOUNT', what, '', 'accounts', self.handle_accounts, self.accountdata_callbacks,
+            self.callback_timeout['ACCOUNT'], self.handle_initial_account_failure
         )
 
         self.output("Sending initial Orders query...")
@@ -1467,9 +1459,8 @@ class RTX(object):
         execution_where = "TYPE='ExchangeTradeOrder'"
         self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').advise('ORDERS', '*', execution_where, self.handle_execution_update)
         self.rtx_request(
-            'ACCOUNT_GATEWAY', 'ORDER', 'ORDERS', '*', execution_where, 'executions',
-            self.handle_initial_executions_response, self.execution_callbacks, self.callback_timeout['ORDERSTATUS'],
-            self.handle_initial_executions_failure
+            'ACCOUNT_GATEWAY', 'ORDER', 'ORDERS', '*', execution_where, 'executions', self.handle_initial_executions_response,
+            self.execution_callbacks, self.callback_timeout['ORDERSTATUS'], self.handle_initial_executions_failure
         )
 
         # on a reconnect, there may be symbols that need an advise
@@ -1545,10 +1536,9 @@ class RTX(object):
     def CheckPendingResults(self):
         # check each callback list for timeouts
         for cblist in [self.timer_callbacks, self.position_callbacks, self.ticket_callbacks, self.openorder_callbacks,
-                       self.execution_callbacks, self.execution_status_callbacks, self.bardata_callbacks,
-                       self.order_callbacks, self.cancel_callbacks, self.add_symbol_callbacks,
-                       self.accountdata_callbacks, self.set_account_callbacks, self.account_request_callbacks,
-                       self.order_status_callbacks]:
+                       self.execution_callbacks, self.execution_status_callbacks, self.bardata_callbacks, self.order_callbacks,
+                       self.cancel_callbacks, self.add_symbol_callbacks, self.accountdata_callbacks, self.set_account_callbacks,
+                       self.account_request_callbacks, self.order_status_callbacks]:
             dlist = []
             for cb in cblist:
                 cb.check_expire()
@@ -1668,12 +1658,12 @@ class RTX(object):
         oid = fields['ORIGINAL_ORDER_ID']
         account = fields['ACCOUNT']
         status = fields['CURRENT_STATUS']
-        cusip = fields.get('CUSIP','')
+        cusip = fields.get('CUSIP', '')
         volume = fields['VOLUME']
         price = fields['PRICE']
         transaction = fields['BUYORSELL']
         remaining = fields['ORDER_RESIDUAL']
-        
+
         if self.log_execution_updates:
             self.output(f"FILL: {xid} {cusip} {symbol} {transaction} {volume} {price} {remaining}")
 
@@ -1767,9 +1757,7 @@ class RTX(object):
             self.seconds_disconnected += 1
             if self.seconds_disconnected > self.gateway_disconnect_timeout:
                 if self.enable_gateway_disconnect_shutdown:
-                    self.force_disconnect(
-                        'Realtick Gateway connection timed out after %d seconds' % self.seconds_disconnected
-                    )
+                    self.force_disconnect('Realtick Gateway connection timed out after %d seconds' % self.seconds_disconnected)
         self.CheckPendingResults()
 
         if self.enable_auto_reset:
@@ -1956,8 +1944,7 @@ class RTX(object):
         fields = ','.join(['%s=%s' % (i, v) for i, v in o.items()])
 
         acb = API_Callback(
-            self, tid, 'ticket-ack', RTX_LocalCallback(self, self.ticket_submit_ack_callback),
-            self.callback_timeout['ORDER']
+            self, tid, 'ticket-ack', RTX_LocalCallback(self, self.ticket_submit_ack_callback), self.callback_timeout['ORDER']
         )
         cb = API_Callback(
             self, tid, 'ticket', RTX_LocalCallback(self, self.ticket_submit_callback), self.callback_timeout['ORDER']
@@ -1973,15 +1960,9 @@ class RTX(object):
         """called when staged order ticket request has been submitted with 'poke' and OnOtherAck has returned"""
         self.output('staged order ticket submitted: %s' % repr(data))
 
-    def submit_order(
-        self, account, route, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None
-    ):
+    def submit_order(self, account, route, order_type, price, stop_price, symbol, quantity, callback, staged=None, oid=None):
         if not self.initialized:
-            API_Callback(self, 0, 'submit_order',
-                         callback).complete({
-                             'status': 'Error',
-                             'errorMsg': 'gateway not initialized'
-                         })
+            API_Callback(self, 0, 'submit_order', callback).complete({'status': 'Error', 'errorMsg': 'gateway not initialized'})
             return
 
         if not self.verify_account(account):
@@ -2073,8 +2054,7 @@ class RTX(object):
         fields = ','.join(['%s=%s' % (i, v) for i, v in o.items() if i[0].isupper()])
 
         acb = API_Callback(
-            self, oid, 'order-ack', RTX_LocalCallback(self, self.order_submit_ack_callback),
-            self.callback_timeout['ORDER']
+            self, oid, 'order-ack', RTX_LocalCallback(self, self.order_submit_ack_callback), self.callback_timeout['ORDER']
         )
         cb = API_Callback(
             self, oid, 'order', RTX_LocalCallback(self, self.order_submit_callback), self.callback_timeout['ORDER']
@@ -2093,11 +2073,7 @@ class RTX(object):
         self.output('cancel_order %s' % oid)
 
         if not self.initialized:
-            API_Callback(self, 0, 'cancel_order',
-                         callback).complete({
-                             'status': 'Error',
-                             'errorMsg': 'gateway not initialized'
-                         })
+            API_Callback(self, 0, 'cancel_order', callback).complete({'status': 'Error', 'errorMsg': 'gateway not initialized'})
             return
 
         cb = API_Callback(self, oid, 'cancel_order', callback, self.callback_timeout['ORDER'])
@@ -2207,8 +2183,7 @@ class RTX(object):
 
     def request_execution(self, xid, callback):
         cb = API_Callback(self, xid, 'execution', callback, self.callback_timeout['ORDERSTATUS'])
-        self.cxn_get('ACCOUNT_GATEWAY',
-                     'ORDER').request('ORDERS', '*', f"TYPE='ExchangeTradeOrder',ORDER_ID='{xid}'", cb)
+        self.cxn_get('ACCOUNT_GATEWAY', 'ORDER').request('ORDERS', '*', f"TYPE='ExchangeTradeOrder',ORDER_ID='{xid}'", cb)
         self.execution_status_callbacks.append(cb)
 
     def request_account_data(self, account, fields, callback):
@@ -2281,9 +2256,7 @@ class RTX(object):
             offset = int(str(bar_start))
             bar_end = self.feed_now + datetime.timedelta(minutes=1)
             if bar_end.time() > session_stop.time():
-                bar_end = datetime.datetime(
-                    bar_end.year, bar_end.month, bar_end.day, session_stop.hour, session_stop.minute, 0
-                )
+                bar_end = datetime.datetime(bar_end.year, bar_end.month, bar_end.day, session_stop.hour, session_stop.minute, 0)
             if table == 'DAILY':
                 delta = [
                     datetime.timedelta(days=offset),
@@ -2304,16 +2277,14 @@ class RTX(object):
                 bar_start = self.feed_now.date().isoformat()
             elif re.match('^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d$', bar_start):
                 # bar_start provided with time; adjust timezone
-                bar_start = self.unlocalize_time(datetime.datetime.strptime(bar_start,
-                                                                            '%Y-%m-%d %H:%M:%S')).isoformat(' ')[:19]
+                bar_start = self.unlocalize_time(datetime.datetime.strptime(bar_start, '%Y-%m-%d %H:%M:%S')).isoformat(' ')[:19]
             elif not re.match('^\d\d\d\d-\d\d-\d\d$', bar_start):
                 return self._fail_query_bars('query_bars: bad parameter format bar_start=%s' % bar_start, callback)
 
             if bar_end == '.':
                 bar_end = bar_start[:10]
             elif re.match('^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d$', bar_end):
-                bar_end = self.unlocalize_time(datetime.datetime.strptime(bar_end,
-                                                                          '%Y-%m-%d %H:%M:%S')).isoformat(' ')[:19]
+                bar_end = self.unlocalize_time(datetime.datetime.strptime(bar_end, '%Y-%m-%d %H:%M:%S')).isoformat(' ')[:19]
             elif not re.match('^\d\d\d\d-\d\d-\d\d$', bar_end):
                 return self._fail_query_bars('query_bars: bad parameter format bar_end=%s' % bar_end, callback)
 
@@ -2334,9 +2305,7 @@ class RTX(object):
             )
 
         if bar_end.time() > session_stop.time() or table == 'DAILY':
-            bar_end = datetime.datetime(
-                bar_end.year, bar_end.month, bar_end.day, session_stop.hour, session_stop.minute, 0
-            )
+            bar_end = datetime.datetime(bar_end.year, bar_end.month, bar_end.day, session_stop.hour, session_stop.minute, 0)
 
         where = ','.join(
             [
@@ -2367,8 +2336,8 @@ class RTX(object):
                 row['TRDTIM_1'] = [session_start for t in row['TRD_DATE']]
             types = {k: type(v) for k, v in row.items()}
             #print('types = %s' % repr(types))
-            if types == {'DISP_NAME': str, 'TRD_DATE': list, 'TRDTIM_1': list, 'OPEN_PRC': list, 'HIGH_1': list,
-                         'LOW_1': list, 'SETTLE': list, 'ACVOL_1': list}:
+            if types == {'DISP_NAME': str, 'TRD_DATE': list, 'TRDTIM_1': list, 'OPEN_PRC': list, 'HIGH_1': list, 'LOW_1': list,
+                         'SETTLE': list, 'ACVOL_1': list}:
                 bars = [
                     self.format_barchart_date(row['TRD_DATE'][i], row['TRDTIM_1'][i], self.id) + [
                         self.parse_tql_float(row['OPEN_PRC'][i], self.id, 'OPEN_PRC'),

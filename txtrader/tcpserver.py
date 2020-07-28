@@ -88,7 +88,7 @@ class tcpserver(basic.NetstringReceiver):
         options_field = line[len(auth) + len(username) + len(password) + 3:]
         if not options_field.startswith('{'):
             # legacy options are in string format: i.e. 'noquotes notrades'; convert to dict
-            self.options={o:True for o in options_field.strip().split()}
+            self.options = {o: True for o in options_field.strip().split()}
         else:
             self.options = json.loads(options_field) if options_field else {}
         if self.factory.validate(username, password):
@@ -242,8 +242,7 @@ class tcpserver(basic.NetstringReceiver):
         self.factory.output('client connection from %s' % self.transport.getPeer())
         self.authmap.discard(self.transport.getPeer())
         self.send(
-            '.connected: %s %s %s %s on %s' %
-            (self.factory.api.label, str(VERSION), str(DATE), str(LABEL), str(gethostname()))
+            '.connected: %s %s %s %s on %s' % (self.factory.api.label, str(VERSION), str(DATE), str(LABEL), str(gethostname()))
         )
 
     def connectionLost(self, reason):

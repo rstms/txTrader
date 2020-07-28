@@ -227,8 +227,7 @@ def test_partial_fill(api):
             partial_fills += 1
         average_price = o['avgfillprice'] if 'avgfillprice' in o else None
         print(
-            'status=%s filled=%s remaining=%s average_price=%s type=%s' %
-            (status, filled, remaining, average_price, o['type'])
+            'status=%s filled=%s remaining=%s average_price=%s type=%s' % (status, filled, remaining, average_price, o['type'])
         )
         assert not (status == 'Filled' and filled < quantity)
         if not during_trading_hours and status == 'Error':
@@ -517,10 +516,7 @@ def test_staged_trade_execute(api):
     assert 'permid' in t
     oid = t['permid']
     status = t['status']
-    print(
-        'Created staged order %s with status %s, waiting 5 seconds, then changing order to auto-execute' %
-        (oid, status)
-    )
+    print('Created staged order %s with status %s, waiting 5 seconds, then changing order to auto-execute' % (oid, status))
 
     tickets = api.query_tickets()
     assert oid in tickets

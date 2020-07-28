@@ -40,9 +40,11 @@ defaults = {
     "LOG_API_MESSAGES": 0,
     "LOG_CLIENT_MESSAGES": 0,
     "LOG_CXN_EVENTS": 0,
-    "LOG_HTTP_REQUESTS": 0,
-    "LOG_HTTP_RESPONSES": 0,
+    "LOG_HTTP_REQUESTS": 1,
+    "LOG_HTTP_RESPONSES": 1,
+    "LOG_RESPONSE_TRUNCATE": 96,
     "LOG_ORDER_UPDATES": 1,
+    "LOG_ORDER_UPDATE_DUPS": 0,
     "LOG_EXECUTION_UPDATES": 1,
     "LOG_CALLBACK_METRICS": 0,
     "MODE": "rtx",
@@ -77,7 +79,7 @@ class Config(object):
         if not value:
             value = environ.get('TXTRADER_%s' % key)
             if not value:
-                source='internal'
+                source = 'internal'
                 value = defaults[key]
                 if value == None:
                     self.output('ALERT: Config.get(%s) failed' % key)

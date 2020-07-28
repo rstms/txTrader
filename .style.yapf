@@ -6,4 +6,4 @@ split_before_first_argument = true
 split_before_dot = true
 blank_line_before_nested_class_or_def = true
 dedent_closing_brackets = true
-column_limit = 120
+column_limit = 128

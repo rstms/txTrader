@@ -38,8 +38,7 @@ class webserver(object):
         for handler, route in self.commands:
             require_init = not route in USABLE_BEFORE_INIT
             self.root.putChild(
-                route.encode(),
-                Leaf(self, getattr(self, handler), api.log_http_requests, api.log_http_responses, require_init)
+                route.encode(), Leaf(self, getattr(self, handler), api.log_http_requests, api.log_http_responses, require_init)
             )
 
     def render(self, d, data):
@@ -385,6 +384,7 @@ class Leaf(Resource):
         self.isLeaf = True
         self.log_request = log_request
         self.log_response = log_response
+        self.log_response_truncate = self.root.api.log_response_truncate
         self.require_init = require_init
 
     def render(self, request):
@@ -412,7 +412,7 @@ class Leaf(Resource):
             data[key.decode()] = value[0].decode()
         data['client'] = f"{request.client.host}:{request.client.port}"
         if self.log_request:
-            self.root.output(f"GET--> {request.client.host}:{request.client.port} {request.path.decode()} {repr(data)}")
+            self.root.api.output(f"GET--> {request.client.host}:{request.client.port} {request.path.decode()} {repr(data)}")
         d = defer.Deferred()
         d.addCallback(self.write_response, request)
         d.addCallback(lambda ign: request.finish())
@@ -425,9 +425,7 @@ class Leaf(Resource):
         data = json.loads(request.content.getvalue().decode())
         data['client'] = f"{request.client.host}:{request.client.port}"
         if self.log_request:
-            self.root.output(
-                f"POST--> {request.client.host}:{request.client.port} {request.path.decode()} {repr(data)}"
-            )
+            self.root.api.output(f"POST--> {request.client.host}:{request.client.port} {request.path.decode()} {repr(data)}")
         d = defer.Deferred()
         d.addCallback(self.write_response, request)
         d.addCallback(lambda ign: request.finish())
@@ -438,12 +436,20 @@ class Leaf(Resource):
 
     def write_response(self, data, request):
         if self.log_response:
-            self.root.output(f'<--RESPONSE {repr(data)}')
+            try:
+                data_length = len(data)
+            except TypeError:
+                data_length = 0
+            truncated = repr(data)
+            if len(truncated) > self.log_response_truncate:
+                truncated = truncated[:self.log_response_truncate] + '...'
+            self.root.api.output(f"<--[{request.code}] {data_length} {truncated}")
+        self.root.api.debug(f'RESPONSE: {repr(data)}')
         request.setHeader(b'Content-type', b'application/json')
         request.write(data.encode())
 
     def api_error(self, failure, request):
-        self.root.output('ALERT: API error: %s' % repr(failure))
+        self.root.api.error('ALERT: API error: %s' % repr(failure))
         request.setResponseCode(500)
         return failure
 
@@ -463,6 +469,10 @@ class TxTraderSite(Site):
     def __init__(self, server_root, txtrader_api=None):
         self.txtrader_api = txtrader_api
         super().__init__(server_root)
+
+    def startFactory(self):
+        self.txtrader_api.output('startFactory')
+        self.logPath = None
 
     def requestFactory(self, channel, queued):
         return txTraderRequest(channel, queued)
