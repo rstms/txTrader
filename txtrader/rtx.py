@@ -458,9 +458,6 @@ class API_Execution(object):
         else:
             self.api.error_handler(self.oid, f"Execution Update ORDER_ID mismatch: {repr(data)}")
 
-        if self.api.log_execution_updates:
-            self.api.info(f"Update: {data['TYPE']} XID={self.oid} OID={order_id}")
-
     def render(self):
         self.api.debug(f"{self} render")
         result = {f: self.fields.get(f) for f in self.fids}
@@ -631,7 +628,7 @@ class API_Order(object):
             data['CUSIP'] = self.api.get_cusip(data['DISP_NAME'])
 
         if self.api.log_order_updates:
-            self.api.info(f"Update: {data['TYPE']} {change} OID={self.oid} ORDER_ID={order_id}")
+            self.api.output(f"ORDER: {data['TYPE']} {change} OID={self.oid} ORDER_ID={order_id}")
 
         # only apply new or changed messages to the base order; (don't move order status back in time when refresh happens)
 
@@ -1671,6 +1668,14 @@ class RTX(object):
         oid = fields['ORIGINAL_ORDER_ID']
         account = fields['ACCOUNT']
         status = fields['CURRENT_STATUS']
+        cusip = fields.get('CUSIP','')
+        volume = fields['VOLUME']
+        price = fields['PRICE']
+        remaining = fields['ORDER_RESIDUAL']
+        
+        if self.log_execution_updates:
+            self.output(f"FILL: {xid} {oid} {status} {account} {symbol} {cusip} {volume} {price} {remaining}")
+
         self.WriteAllClients(f"execution.{xid} {account} {oid} {status}", option_flag='execution-notification')
         self.WriteAllClients(f"execution-data {json.dumps(fields)}", option_flag='execution-data')
 
