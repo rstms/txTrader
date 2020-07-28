@@ -86,7 +86,11 @@ class tcpserver(basic.NetstringReceiver):
     def cmd_auth(self, line):
         auth, username, password = (line).split()[:3]
         options_field = line[len(auth) + len(username) + len(password) + 3:]
-        self.options = json.loads(options_field) if options_field else {}
+        if not options_field.startswith('{'):
+            # legacy options are in string format: i.e. 'noquotes notrades'; convert to dict
+            self.options={o:True for o in options_field.strip().split()}
+        else:
+            self.options = json.loads(options_field) if options_field else {}
         if self.factory.validate(username, password):
             self.authmap.add(self.transport.getPeer())
             self.factory.api.open_client(self)
