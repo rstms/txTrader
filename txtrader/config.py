@@ -18,7 +18,7 @@ defaults = {
     "API_CLIENT_ID": 0,
     "API_HOST": '127.0.0.1',
     "API_PORT": 51070,
-    "API_ROUTE": "DEMOEUR",
+    "API_ROUTE": "DEMO",
     "API_TIMEZONE": "US/Eastern",
     "DEBUG_API_MESSAGES": 0,
     "GATEWAY_DISCONNECT_TIMEOUT": 30,
@@ -35,14 +35,14 @@ defaults = {
     "GET_BACKOFF_FACTOR": .1,
     "GET_RETRIES": 8,
     "HOST": "127.0.0.1",
-    "HTTP_PORT": 50080,
+    "HTTP_PORT": 50070,
     "LOG_LEVEL": "WARN",
     "LOG_API_MESSAGES": 0,
     "LOG_CLIENT_MESSAGES": 0,
     "LOG_CXN_EVENTS": 0,
     "LOG_HTTP_REQUESTS": 0,
     "LOG_HTTP_RESPONSES": 0,
-    "LOG_ORDER_UPDATES": 1,
+    "LOG_ORDER_UPDATES": 0,
     "LOG_EXECUTION_UPDATES": 1,
     "LOG_CALLBACK_METRICS": 0,
     "MODE": "rtx",
@@ -51,7 +51,7 @@ defaults = {
     "TESTING": 0,
     "TIME_OFFSET": 0,
     "TIMEOUT_ACCOUNT": 20,
-    "TIMEOUT_ADDSYMBOL": 20,
+    "TIMEOUT_ADDSYMBOL": 15,
     "TIMEOUT_BARCHART": 10,
     "TIMEOUT_DEFAULT": 15,
     "TIMEOUT_ORDER": 300,
@@ -72,15 +72,16 @@ class Config(object):
 
     def get(self, key):
         prefix = 'TXTRADER%s_' % (self.label)
-        default = ''
+        source = 'env'
         value = environ.get('TXTRADER%s_%s' % (self.label, key))
         if not value:
             value = environ.get('TXTRADER_%s' % key)
             if not value:
-                default = ' (default)'
+                source='internal'
                 value = defaults[key]
                 if value == None:
                     self.output('ALERT: Config.get(%s) failed' % key)
                     exit(1)
-        self.output(f"config {key}={'XXXXXXXX' if 'PASSWORD' in key else value}{default}")
+        default = ' (default)' if value == defaults[key] else ''
+        self.output(f"config {key}={'XXXXXXXX' if 'PASSWORD' in key else value} {source}{default}")
         return value
