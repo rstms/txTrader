@@ -1671,10 +1671,11 @@ class RTX(object):
         cusip = fields.get('CUSIP','')
         volume = fields['VOLUME']
         price = fields['PRICE']
+        transaction = fields['BUYORSELL']
         remaining = fields['ORDER_RESIDUAL']
         
         if self.log_execution_updates:
-            self.output(f"FILL: {xid} {oid} {status} {account} {symbol} {cusip} {volume} {price} {remaining}")
+            self.output(f"FILL: {xid} {cusip} {symbol} {transaction} {volume} {price} {remaining}")
 
         self.WriteAllClients(f"execution.{xid} {account} {oid} {status}", option_flag='execution-notification')
         self.WriteAllClients(f"execution-data {json.dumps(fields)}", option_flag='execution-data')
