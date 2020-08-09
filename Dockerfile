@@ -25,7 +25,7 @@ RUN \
   && dpkg-reconfigure -f noninteractive tzdata
 
 RUN useradd -m txtrader
-USER txtrader
+#USER txtrader
 WORKDIR /home/txtrader
 COPY txtrader /home/txtrader/txtrader
 COPY setup.py /home/txtrader

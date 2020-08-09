@@ -526,7 +526,7 @@ class API_Update_Mapper():
         self.symbol = symbol
         self.updates = []  # updates are API_Update
         self.api.debug(f"{self}.__init__(...)")
-        self.api.pending_mapper_lookups[symbol] = self
+        self.register_as_pending(True)
 
     def __del__(self):
         self.api.debug(f"__del__({self})")
@@ -549,11 +549,35 @@ class API_Update_Mapper():
             self.api.debug(f"{self} sending amended update: {update}")
             update.run_callback()
         # remove the pending list entry (that contains self)
-        self.api.pending_mapper_lookups.pop(self.symbol)
+        self.register_as_pending(False)
 
     def handle_failure(self, error):
         self.api.error(f"{self} handle_failure")
         self.api.error_handler(f"{self}", f"Update Mapping for {self.symbol} failed; {error}")
+        self.register_as_pending(False)
+
+    def register_as_pending(self, pending_status):
+        current_mapper = self.api.pending_mapper_lookups(self.symbol, None)
+        if current_mapper == self:
+            if pending_status:
+                self.api.error(f"{self}: multiple pending mapper registration attempts for {self.symbol}")
+            else:
+                self.api.output(f'Clearing pending mapper registration for {self.symbol} <{hex(id(self))}>')
+                self.api.pending_mapper_lookups.pop(self.symbol)
+        elif current_mapper:
+            # current exists but is not self
+            self.api.error(
+                f"{self}: Failed to {'register' if pending_status else 'clear'} pending mapper registration for {self.symbol} because another registration exists for {repr(current_mapper)}"
+            )
+        else:
+            # current is None
+            if pending_status:
+                self.api.output(f'Registering pending mapper for {self.symbol} <{hex(id(self))}>')
+                self.api.pending_mapper_lookups[self.symbol] = self
+            else:
+                self.api.error(
+                    f"{self}: Failed to clear pending mapper registration because no registration exists for for {self.symbol}"
+                )
 
 
 class API_Order(object):
@@ -1247,6 +1271,7 @@ class RTX(object):
 
     def init_config(self):
         self.config = Config(self.channel, output=self.output)
+        self.host = self.config.get('HOST')
         self.api_hostname = self.config.get('API_HOST')
         self.api_port = int(self.config.get('API_PORT'))
         self.username = self.config.get('USERNAME')
@@ -1734,8 +1759,13 @@ class RTX(object):
             self.output('awaiting initial order response...')
         elif self.initial_execution_request_pending:
             self.output('awaiting initial execution response...')
-        elif len(self.pending_mapper_lookups):
-            self.output('awaiting initial update mapper lookups...')
+        elif self.initial_update_mapper_pending:
+            if len(self.pending_mapper_lookups):
+                self.output('awaiting initial update mapper lookups...')
+            else:
+                self.initial_pending_mapper_lookups = False
+                self.output(f"Initial update mapping complete.")
+                startup_complete = True
         else:
             startup_complete = True
         return startup_complete

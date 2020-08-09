@@ -115,6 +115,9 @@ clean:
 	find . -name '*.pyc' | xargs rm -f
 # txTrader makefile
 
+rebuild: fmt
+	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
+	docker-compose build --no-cache
 
 build: fmt
 	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
@@ -122,7 +125,7 @@ build: fmt
 
 # run the service locally
 run:
-	docker-compose run --rm --service-ports txtrader | tee log
+	envdir /etc/txtrader docker-compose run --rm --service-ports txtrader | tee log
 
 # start the service locally in the background
 start:

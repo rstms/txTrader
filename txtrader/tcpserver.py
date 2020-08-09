@@ -280,4 +280,5 @@ class serverFactory(Factory):
         return username == self.api.username and password == self.api.password
 
     def buildProtocol(self, addr):
+        self.output(f'buildProtocol: addr={addr}')
         return super().buildProtocol(addr)

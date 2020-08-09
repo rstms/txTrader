@@ -51,5 +51,5 @@ services:
       TXTRADER_API_PORT:
       TXTRADER_API_ACCOUNT:
     ports:
-      - "50080:50080"
-      - "50090:50090"
+      - "127.0.0.1:50080:50080"
+      - "127.0.0.1:50090:50090"
