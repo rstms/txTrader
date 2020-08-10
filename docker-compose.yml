@@ -50,7 +50,7 @@ services:
       TXTRADER_API_HOST:
       TXTRADER_API_PORT:
       TXTRADER_API_ACCOUNT:
-    network_mode: host
+    network_mode: bridge
     ports:
       - "50080:50080"
       - "50090:50090"

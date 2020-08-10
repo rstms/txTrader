@@ -3,6 +3,7 @@
 ORG:=rstms
 PROJECT:=$(shell basename `pwd` | tr - _ | tr [A-Z] [a-z])
 PROJECT_NAME:=$(shell basename `pwd` | tr [A-Z] [a-z])
+ENVDIR=./env
 
 PYTHON=python3
 
@@ -125,11 +126,11 @@ build: fmt
 
 # run the service locally
 run:
-	envdir /etc/txtrader docker-compose run --rm --service-ports txtrader | tee log
+	envdir ${ENVDIR} docker-compose run --rm --service-ports txtrader | tee log
 
 # start the service locally in the background
 start:
-	envdir /etc/txtrader docker-compose up --build -d txtrader
+	envdir ${ENVDIR} docker-compose up --build -d txtrader
 
 # stop the local running service
 stop:
@@ -141,15 +142,15 @@ restart: stop start
 # run the regression tests
 TPARM?=-svx
 test: build
-	envdir /etc/txtrader docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
+	envdir ${ENVDIR} docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
 
 # start a shell in the container with the dev directory bind-mounted
 shell:
-	docker-compose run --rm --entrypoint /bin/bash -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader -l
+	envdir ${ENVDIR} docker-compose run --rm --entrypoint /bin/bash -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader -l
 
 debug: build
-	docker-compose run --rm --service-ports -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader /bin/bash -l -c "txtraderd --debug"
+	envdir ${ENVDIR} docker-compose run --rm --service-ports -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader /bin/bash -l -c "txtraderd --debug"
 
 # tail the log of any running txtrader container
 tail:
-	@while true; do ([ $(docker-compose ps -q txtrader) ] && docker-compose logs -f txtrader); echo -n '.'; sleep 3; done
+	@while true; do docker-compose logs -f txtrader; sleep 3; done

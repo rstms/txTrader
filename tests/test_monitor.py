@@ -42,7 +42,8 @@ def dump(label, o):
 def _callback(label, msg):
     print('%s: %s' % (label, msg))
     _rx[label] = msg
-    return label != 'TIME'
+    ret = label != 'TIME'
+    return ret
 
 
 _rx = {}
@@ -50,7 +51,14 @@ _rx = {}
 
 def test_monitor_connect_and_wait_for_time_update(server):
 
-    monitor = Monitor(username=test_username, password=test_password, callbacks={'*': _callback})
+    monitor = Monitor(
+        host=test_host,
+        port=test_port,
+        username=test_username,
+        password=test_password,
+        callbacks={'*': _callback},
+        log_level='INFO'
+    )
 
     print(f"\ntxtrader monitor connected: {monitor}")
     assert monitor
