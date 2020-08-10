@@ -129,7 +129,7 @@ run:
 
 # start the service locally in the background
 start:
-	docker-compose up --build -d txtrader
+	envdir /etc/txtrader docker-compose up --build -d txtrader
 
 # stop the local running service
 stop:
@@ -141,7 +141,7 @@ restart: stop start
 # run the regression tests
 TPARM?=-svx
 test: build
-	docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
+	envdir /etc/txtrader docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
 
 # start a shell in the container with the dev directory bind-mounted
 shell:
@@ -152,4 +152,4 @@ debug: build
 
 # tail the log of any running txtrader container
 tail:
-	@while true; do (docker ps -q --filter name=txtrader_txtrader_1 | xargs -r docker logs --follow); echo -n '.'; sleep 3; done
+	@while true; do ([ $(docker-compose ps -q txtrader) ] && docker-compose logs -f txtrader); echo -n '.'; sleep 3; done

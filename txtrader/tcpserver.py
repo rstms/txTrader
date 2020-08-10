@@ -23,9 +23,14 @@ from socket import gethostname
 import ujson as json
 import traceback
 
+# set 512MB line buffer
+LINE_BUFFER_LENGTH = 0x20000000
+
 
 class tcpserver(basic.NetstringReceiver):
-    # set 256MB line buffer                                                                                                                                       MAX_LENGTH = 0x10000000
+
+    MAX_LENGTH = LINE_BUFFER_LENGTH
+
     def __init__(self):
         self.commands = {
             'auth': self.cmd_auth,
@@ -81,7 +86,12 @@ class tcpserver(basic.NetstringReceiver):
                 self.send('.what?')
 
     def send(self, line):
-        return self.sendString(line.encode())
+        if len(line) > self.MAX_LENGTH:
+            self.factory.api.force_disconnect(
+                f"NetstringReceiver: cannot send message of length {len(line)} {repr(line[:64])}..."
+            )
+        else:
+            return self.sendString(line.encode())
 
     def cmd_auth(self, line):
         auth, username, password = (line).split()[:3]

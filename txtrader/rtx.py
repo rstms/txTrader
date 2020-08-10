@@ -57,11 +57,13 @@ from twisted.internet.task import LoopingCall
 from twisted.web import server
 from socket import gethostname
 
+# set 256MB line buffer
+LINE_BUFFER_LENGTH = 0x10000000
+
 
 class RtxClient(LineReceiver):
     delimiter = b'\n'
-    # set 256MB line buffer
-    MAX_LENGTH = 0x10000000
+    MAX_LENGTH = LINE_BUFFER_LENGTH
 
     def __init__(self, rtx):
         self.rtx = rtx
@@ -540,7 +542,7 @@ class API_Update_Mapper():
         if len(self.updates) == 1:
             self.api.debug(f"{self} initial update, enabling symbol {self.symbol}")
             cb = RTX_LocalCallback(self.api, self.handle_response, self.handle_failure)
-            self.api.symbol_enable(self.symbol, self.api, cb)
+            self.api.symbol_enable(self.symbol, self.api, cb, timeout_type='ORDERSTATUS')
 
     def handle_response(self, response):
         self.api.debug(f"{self} handle_response {response}")
@@ -557,7 +559,7 @@ class API_Update_Mapper():
         self.register_as_pending(False)
 
     def register_as_pending(self, pending_status):
-        current_mapper = self.api.pending_mapper_lookups(self.symbol, None)
+        current_mapper = self.api.pending_mapper_lookups.get(self.symbol, None)
         if current_mapper == self:
             if pending_status:
                 self.api.error(f"{self}: multiple pending mapper registration attempts for {self.symbol}")
@@ -2124,10 +2126,10 @@ class RTX(object):
         else:
             cb.complete({'status': 'Error', 'errorMsg': 'Order not found', 'id': oid})
 
-    def symbol_enable(self, symbol, client, callback):
+    def symbol_enable(self, symbol, client, callback, timeout_type='ADDSYMBOL'):
         self.info('symbol_enable(%s,%s,%s)' % (symbol, client, callback))
         if not symbol in self.symbols:
-            cb = API_Callback(self, symbol, 'new_symbol', callback, self.callback_timeout['ADDSYMBOL'])
+            cb = API_Callback(self, symbol, 'new_symbol', callback, self.callback_timeout[timeout_type])
             self.add_symbol_callbacks.append(cb)
             API_Symbol(self, symbol, client, cb)
         else:
