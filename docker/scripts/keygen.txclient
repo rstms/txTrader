@@ -1,4 +1,0 @@
-#!/bin/bash
-NAME=$(basename $0)
-NAME=${NAME#keygen.}
-ssh-keygen -f ~/.ssh/known_hosts -R $(containerip $NAME)

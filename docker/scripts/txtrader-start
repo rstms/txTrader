@@ -1,2 +1,0 @@
-#!/bin/bash
-eval exec ssh root@$(containerip txclient) svc -u /etc/service/txtrader

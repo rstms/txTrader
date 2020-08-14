@@ -11,5 +11,8 @@
 
 """
 
-__all__ = ['version', 'tcpserver', 'webserver',
-           'tws', 'cqg', 'client', 'monitor']
+__all__ = ['version', 'tcpserver', 'webserver', 'rtx', 'client', 'monitor']
+from .version import VERSION, DATE, TIME
+from .revision import REVISION
+LABEL = 'TxTrader Securities Trading API Controller'
+HEADER = f"{LABEL} {VERSION} {DATE} {TIME}"

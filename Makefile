@@ -1,159 +1,156 @@
-# txTrader Makefile
+# pypi deploy Makefile
 
-REQUIRED_PACKAGES = daemontools-run ucspi-tcp python python-dev
-REQUIRED_PIP = pytest Twisted hexdump git+git://github.com/rstms/ultrajson.git simplejson requests pytz tzlocal
-PROJECT_PIP = ./dist/*.tar.gz
+ORG:=rstms
+PROJECT:=$(shell basename `pwd` | tr - _ | tr [A-Z] [a-z])
+PROJECT_NAME:=$(shell basename `pwd` | tr [A-Z] [a-z])
+ENVDIR=./env
 
-ENVDIR = /etc/txtrader
-PYTHON = python2
-PIP = pip2
-VENV = $(HOME)/venv/txtrader
+PYTHON=python3
 
-# modes: tws cqg rtx
-MODE=rtx
+# find all python sources (used to determine when to bump build number)
+PYTHON_SOURCES:=$(shell find setup.py ${PROJECT} tests -name '*.py')
+OTHER_SOURCES:=Makefile Dockerfile setup.py setup.cfg tox.ini README.md LICENSE .gitignore .style.yapf
+SOURCES:=${PYTHON_SOURCES} ${OTHER_SOURCES}
 
-TXTRADER_TEST_PORT=51070 
-TXTRADER_TEST_HOST=127.0.0.1
+# if VERSION=major or VERSION=minor specified, be sure a version bump will happen
+$(if ${VERSION},$(shell touch ${PROJECT}/version.py))
 
-default: install
+help: 
+	@echo "make tools|install|uninstall|test|dist|publish|release|clean"
 
-help:
-	@echo "\nQuick Start Commands:\n\nsudo make clean && make config && make build && make venv && make install && make run\n"
+# install python modules for development and testing
+tools: 
+	${PYTHON} -m pip install --upgrade setuptools pybump pytest tox twine wheel yapf
 
+#TPARM:=-vvx
+#test:
+#	@echo Testing...
+#	pytest $(TPARM)
+
+install:
+	@echo Installing ${PROJECT} locally
+	${PYTHON} -m pip install --upgrade --editable .
+
+uninstall: 
+	@echo Uninstalling ${PROJECT} locally
+	${PYTHON} -m pip uninstall -y ${PROJECT} 
+
+# ensure no uncommitted changes exist
+gitclean: 
+	$(if $(shell git status --porcelain), $(error "git status dirty, commit and push first"))
+
+# yapf format all changed python sources
+fmt: .fmt  
+.fmt: ${PYTHON_SOURCES}
+	@$(foreach s,$?,yapf -i -vv ${s};) 
+	@touch $@
+
+# bump version in VERSION and in python source if source files have changed since last version bump
+version: VERSION
+VERSION: ${SOURCES}
+	@echo Changed files: $?
+	# If VERSION=major|minor or sources have changed, bump corresponding version element
+	# and commit after testing for any other uncommitted changes.
+	#
+	@pybump bump --file VERSION --level $(if ${VERSION},${VERSION},'patch')
+	@/bin/echo -e >${PROJECT}/version.py "DATE='$$(date +%Y-%m-%d)'\nTIME='$$(date +%H:%M:%S)'\nVERSION='$$(cat VERSION)'"
+	@echo "Version bumped to `cat VERSION`"
+	@touch $@
+
+# test with tox if sources have changed
+.PHONY: tox
+tox: .tox
+.tox: ${SOURCES} VERSION
+	@echo Changed files: $?
+	TOX_TESTENV_PASSENV="TXTRADER_HOST TXTRADER_HTTP_PORT TXTRADER_TCP_PORT TXTRADER_USERNAME TXTRADER_PASSWORD TXTRADER_API_ACCOUNT" tox
+	@touch $@
+
+# create distributable files if sources have changed
+dist: .dist
+.dist:	${SOURCES} .tox
+	@echo Changed files: $?
+	@echo Building ${PROJECT}
+	${PYTHON} setup.py sdist bdist_wheel
+	@touch $@
+
+# set a git release tag and push it to github
+release: gitclean .dist 
+	@echo pushing Release ${PROJECT} v`cat VERSION` to github...
+	TAG="v`cat VERSION`"; git tag -a $$TAG -m "Release $$TAG"; git push origin $$TAG
+
+LOCAL_VERSION=$(shell cat VERSION)
+PYPI_VERSION=$(shell pip search txtrader|awk '/${PROJECT_NAME}/{print substr($$2,2,length($$2)-2)}')
+
+pypi: release
+	$(if $(wildcard ~/.pypirc),,$(error publish failed; ~/.pypirc required))
+	@if [ "${LOCAL_VERSION}" != "${PYPI_VERSION}" ]; then \
+	  echo publishing ${PROJECT} `cat VERSION` to PyPI...;\
+	  ${PYTHON} -m twine upload dist/*;\
+	else \
+	  echo ${PROJECT} ${LOCAL_VERSION} is up-to-date on PyPI;\
+	fi
+
+docker: .docker
+.docker: pypi
+	@echo building docker image
+	docker images | awk '/^${ORG}\/${PROJECT_NAME}/{print $$3}' | xargs -r -n 1 docker rmi -f
+	docker build dockerhub --tag ${ORG}/${PROJECT_NAME}:$(shell cat VERSION)
+	docker build dockerhub --tag ${ORG}/${PROJECT_NAME}:latest
+	@touch $@
+
+dockerhub: .dockerhub
+.dockerhub: .docker 
+	$(if $(wildcard ~/.docker/config.json),,$(error docker-publish failed; ~/.docker/config.json required))
+	@echo pushing images to dockerhub
+	docker login
+	docker push ${ORG}/${PROJECT_NAME}:$(shell cat VERSION)
+	docker push ${ORG}/${PROJECT_NAME}:latest
+
+publish: .dockerhub
+
+# remove all temporary files
 clean:
-	@echo "Cleaning up..."
-	rm -f txtrader/*.pyc
-	rm -rf build
-	rm -rf dist 
-	rm -rf $(VENV)
-	rm -f etc/txtrader/TXTRADER_VENV
-	rm -f .make-*
+	@echo Cleaning up...
+	rm -rf build dist .dist ./*.egg-info .pytest_cache .tox
+	find . -type d -name __pycache__ | xargs rm -rf
+	find . -name '*.pyc' | xargs rm -f
+# txTrader makefile
 
-build:  .make-build
+rebuild: fmt
+	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
+	docker-compose build --no-cache
 
-.make-build: .make-config setup.py txtrader/*.py
-	@echo "Building..."
-	python bumpbuild.py
-	python setup.py sdist 
-	touch .make-build
+build: fmt
+	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
+	docker-compose build 
 
-config: .make-config
+# run the service locally
+run:
+	envdir ${ENVDIR} docker-compose run --rm --service-ports txtrader | tee log
 
-.make-config:
-	@echo "Configuring..."
-	@getent >/dev/null passwd txtrader && echo "User txtrader exists." || sudo adduser --gecos "" --home / --shell /bin/false --no-create-home --disabled-login txtrader
-	@set -e;\
-        for package in $(REQUIRED_PACKAGES); do \
-	  sudo dpkg -s >/dev/null $$package && echo verified package $$package || (echo missing package $$package; false);\
-	done;
-	echo $(VENV)>etc/txtrader/TXTRADER_VENV
-	sudo mkdir -p $(ENVDIR)
-	sudo chmod 770 $(ENVDIR)
-	sudo cp -r etc/txtrader/* $(ENVDIR)
-	sudo chown -R txtrader.txtrader $(ENVDIR)
-	sudo chmod 640 $(ENVDIR)/*
-	touch .make-config
-
-testconfig:
-	@echo "Configuring test API..."
-	sudo sh -c "echo $(TXTRADER_TEST_HOST)>$(ENVDIR)/TXTRADER_API_HOST"
-	sudo sh -c "echo $(TXTRADER_TEST_PORT)>$(ENVDIR)/TXTRADER_API_PORT"
-	sudo sh -c "echo $(TXTRADER_TEST_ACCOUNT)>$(ENVDIR)/TXTRADER_API_ACCOUNT"
-	@echo -n "Restarting service..."
-	$(MAKE) restart
-	@while [ "$$(txtrader 2>/dev/null $(MODE) status)" != '"Up"' ]; do echo -n '.'; sleep 1; done;
-	@txtrader $(MODE) status
-
-cleanup:
-	if ps ax | egrep [d]efunct; then \
-	  sudo pkill supervise;\
-	  sudo pkill multilog;\
-	  sudo kill $$(ps fax | awk '/[s]sh -v/{print $$1}');\
-	fi
-	sleep 3
-
-venv:	.make-venv
-
-.make-venv:
-	@echo "(re)configure venv"
-	#rm -rf $(VENV)
-	virtualenv -p $(PYTHON) $(VENV)
-	. $(VENV)/bin/activate; \
-	for package in $(REQUIRED_PIP); do \
-          echo -n "Installing package $$package into virtual env..."; $(PIP) install --upgrade $$package || false;\
-        done;
-	touch .make-venv
-
-install: stop_wait build .make-venv config
-	@echo "Installing txtrader..."
-	. $(VENV)/bin/activate; $(PIP) install --upgrade $(PROJECT_PIP) || false
-	sudo cp bin/txtrader /usr/local/bin/txtrader
-	sudo mkdir -p /var/svc.d
-	if [ -d /var/svc.d/txtrader ]; then\
-	  sudo svstat /etc/service/txtrader;\
-	else\
-	  sudo cp -rp service/txtrader /var/svc.d;\
-	  sudo touch /var/svc.d/txtrader/down;\
-	  sudo chown -R root.root /var/svc.d/txtrader;\
-	  sudo chown root.txtrader /var/svc.d/txtrader;\
-	  sudo chown root.txtrader /var/svc.d/txtrader/txtrader.tac;\
-	  sudo update-service --add /var/svc.d/txtrader;\
-	fi
-
+# start the service locally in the background
 start:
-	@echo "Starting Service..."
-	sudo rm -f /etc/service/txtrader/down
-	sudo svc -u /etc/service/txtrader
-	@while [ "$$(sudo svstat /etc/service/txtrader| awk '{print $$2}')" != 'up' ]; do echo -n '.'; sleep 1; done
+	envdir ${ENVDIR} docker-compose up --build -d txtrader
 
-start_wait: start
-	@echo -n "Waiting for status 'Up'..."
-	@while [ "$$(txtrader 2>/dev/null $(MODE) status)" != '"Up"' ]; do echo -n '.'; sleep 1; done;
-	@echo "OK"
-
+# stop the local running service
 stop:
-	@echo "Stopping Service..."
-	if [ -d /etc/service/txtrader ]; then\
-	  sudo touch /etc/service/txtrader/down;\
-	  ps ax | egrep [t]xtrader.tac && txtrader rtx shutdown "make stop" || echo not running;\
-	  sudo svc -d /etc/service/txtrader;\
-	  while [ "$$(sudo svstat /etc/service/txtrader| awk '{print $$2}')" != 'down' ]; do echo -n '.'; sleep 1; done;\
-	else\
-       	  echo service not installed;\
-	fi
+	docker-compose down 
 
-stop_wait: stop
-	@echo -n "Waiting for process termination..."
-	@while (ps ax | egrep [t]xtrader.tac >/dev/null); do echo -n '.'; sleep 1; done
-	@echo "OK"
-
+# stop and restart the local running service
 restart: stop start
-	@echo "Restarting Service..."
 
-uninstall: stop_wait
-	@echo "Uninstalling..."
-	if [ -e /etc/service/txtrader ]; then\
-	  sudo svc -d /etc/service/txtrader;\
-	  sudo svc -d /etc/service/txtrader/log;\
-	  sudo update-service --remove /var/svc.d/txtrader;\
-	fi
-	sudo rm -rf /var/svc.d/txtrader
-	cat files.txt | xargs rm -f
-	sudo rm -f /usr/local/bin/txtrader
+# run the regression tests
+TPARM?=-svx
+test: build
+	envdir ${ENVDIR} docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
 
-TESTS := $(wildcard txtrader/*_test.py)
+# start a shell in the container with the dev directory bind-mounted
+shell:
+	envdir ${ENVDIR} docker-compose run --rm --entrypoint /bin/bash -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader -l
 
-TPARM := 
+debug: build
+	envdir ${ENVDIR} docker-compose run --rm --service-ports -v $$(pwd)/txtrader:/home/txtrader/txtrader txtrader /bin/bash -l -c "txtraderd --debug"
 
-.PHONY: test 
-
-test: $(TESTS)
-	@echo Testing...
-	. $(VENV)/bin/activate && cd txtrader; envdir ../etc/txtrader env TXTRADER_TEST_MODE=$(MODE) py.test -vx $(TPARM) $(notdir $^)
-
-run: 
-	@echo Running...
-	. $(VENV)/bin/activate && envdir etc/txtrader twistd --reactor=poll --nodaemon --logfile=- --pidfile= --python=service/txtrader/txtrader.tac | tee /tmp/runlog
-
-logorders:
-	grep WriteAllClients /tmp/runlog | egrep 'rtx.order' | cut -d'{' -f 2- | xargs -n 1 -d'\n' -iLINE echo "{LINE" | jq .
+# tail the log of any running txtrader container
+tail:
+	@while true; do docker-compose logs -f txtrader; sleep 3; done
