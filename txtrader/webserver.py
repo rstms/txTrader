@@ -21,7 +21,7 @@ import sys
 import os
 from datetime import datetime
 import ujson as json
-from txtrader import HEADER, REVISION
+from txtrader import HEADER
 import traceback
 
 USABLE_BEFORE_INIT = ['status', 'uptime', 'version', 'help', 'shutdown']
@@ -84,7 +84,6 @@ class webserver(object):
         """
         ret = {}
         ret['txtrader'] = HEADER
-        ret['revision'] = REVISION
         ret['python'] = sys.version
         ret['flags'] = self.api.flags()
         self.render(d, ret)

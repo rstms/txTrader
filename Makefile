@@ -21,7 +21,7 @@ names:
 PYTHON=python3
 
 # find all python sources (used to determine when to bump build number)
-PYTHON_SOURCES:=$(shell find setup.py ${PROJECT} tests -name '*.py' -not -name version.py -not -name revision.py)
+PYTHON_SOURCES:=$(shell find setup.py ${PROJECT} tests -name '*.py' -not -name version.py)
 OTHER_SOURCES:=Makefile Dockerfile setup.py setup.cfg tox.ini README.md LICENSE .gitignore .style.yapf
 SOURCES:=${PYTHON_SOURCES} ${OTHER_SOURCES}
 
@@ -48,11 +48,10 @@ uninstall:
 	@echo Uninstalling ${PROJECT} locally
 	${PYTHON} -m pip uninstall -y ${PROJECT} 
 
-# ensure no uncommitted changes exist and that VERSION, version.h and revision.h are correct
+# ensure no uncommitted changes exist and that VERSION, version.h and are correct
 gitclean:
 	$(if $(shell [ "${GIT_HEAD}" = $(shell cat VERSION) ] || echo 1), $(error version_branch_mismatch))
 	$(if $(shell [ "$$(awk -F\' '/^VERSION=/{print $$2}' <txtrader/version.py)" = "$$(cat VERSION)" ] || echo 1), $(error version.py_mismatch))
-	$(if $(shell [ "$$(awk -F\' '/^REVISION=/{print $$2}' <txtrader/revision.py)" = "${GIT_HEAD} ${GIT_HASH}" ] || echo 1), $(error revision.py_mismatch))
 	$(if $(shell git status --porcelain), $(error "git status dirty, commit and push first"))
 
 
@@ -70,14 +69,6 @@ VERSION: ${SOURCES}
 	@echo ${GIT_HEAD} >VERSION
 	@/bin/echo -e >${PROJECT}/version.py "DATE='$$(date +%Y-%m-%d)'\nTIME='$$(date +%H:%M:%S)'\nVERSION='$$(cat VERSION)'"
 	@echo "Version is $$(cat VERSION)"
-	@touch $@
-
-revision: REVISION
-REVISION: ${SOURCES}
-	@echo Changed files: $?
-	@/bin/echo -e >REVISION "$$(git rev-parse --abbrev-ref HEAD) $$(git log --pretty=format:'%h' -n 1)"
-	@/bin/echo -e >${PROJECT}/revision.py "REVISION='$$(cat REVISION)'"
-	@cat ${PROJECT}/revision.py
 	@touch $@
 
 # test with tox if sources have changed
@@ -139,10 +130,10 @@ clean:
 	find . -name '*.pyc' | xargs rm -f
 
 
-rebuild: fmt version revision
+rebuild: fmt version
 	docker-compose build --no-cache
 
-build: fmt version revision 
+build: fmt version
 	docker-compose build 
 
 # run the service locally

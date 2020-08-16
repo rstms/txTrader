@@ -28,7 +28,6 @@ from copy import deepcopy
 from txtrader.config import Config
 from txtrader.tcpserver import tcpserver
 from txtrader import HEADER
-from txtrader import REVISION
 
 from logging import getLevelName, DEBUG, INFO, WARNING, ERROR, CRITICAL
 import traceback
@@ -1204,7 +1203,6 @@ class RTX(object):
 
     def __init__(self):
         self.output(HEADER)
-        self.output(REVISION)
         self.label = 'RTX Gateway'
         self.channel = 'rtx'
         self.id = 'RTX'
