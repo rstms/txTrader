@@ -29,8 +29,8 @@ Status change events are available on the TCP/IP streaming service.  The data ar
 Client Access
 -------------
 
-The [`txtrader-client`](https://https://github.com/rstms/txtrader-client) module exposes the server functions to a client program as local python callables.
-The [`txtrader-monitor`](https://https://github.com/rstms/txtrader-monitor) module is used to receive asynchronous events from the TCP channel.  The object is configured by passing a dict with channel names and python functions to be called when data of the desired type is received.
+The [`txtrader-client`](https://github.com/rstms/txtrader-client) module exposes the server functions to a client program as local python callables.
+The [`txtrader-monitor`](https://github.com/rstms/txtrader-monitor) module is used to receive asynchronous events from the TCP channel.  The object is configured by passing a dict with channel names and python functions to be called when data of the desired type is received.
 
 See the client access projects for usage examples.
 
