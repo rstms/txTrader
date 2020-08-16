@@ -21,7 +21,7 @@ names:
 PYTHON=python3
 
 # find all python sources (used to determine when to bump build number)
-PYTHON_SOURCES:=$(shell find setup.py ${PROJECT} tests -name '*.py')
+PYTHON_SOURCES:=$(shell find setup.py ${PROJECT} tests -name '*.py' -not -name version.py -not -name revision.py)
 OTHER_SOURCES:=Makefile Dockerfile setup.py setup.cfg tox.ini README.md LICENSE .gitignore .style.yapf
 SOURCES:=${PYTHON_SOURCES} ${OTHER_SOURCES}
 
@@ -64,17 +64,21 @@ fmt: .fmt
 
 # bump version in VERSION and in python source if source files have changed since last version bump
 # set version from branch name
-version: VERSION
+version: VERSION 
 VERSION: ${SOURCES}
 	@echo Changed files: $?
 	@echo ${GIT_HEAD} >VERSION
 	@/bin/echo -e >${PROJECT}/version.py "DATE='$$(date +%Y-%m-%d)'\nTIME='$$(date +%H:%M:%S)'\nVERSION='$$(cat VERSION)'"
 	@echo "Version is $$(cat VERSION)"
+	@touch $@
 
 revision: REVISION
 REVISION: ${SOURCES}
-	@/bin/echo -e >${PROJECT}/revision.py "REVISION='$$(git rev-parse --abbrev-ref HEAD) $$(git log --pretty=format:'%h' -n 1)'"
+	@echo Changed files: $?
+	@/bin/echo -e >REVISION "$$(git rev-parse --abbrev-ref HEAD) $$(git log --pretty=format:'%h' -n 1)"
+	@/bin/echo -e >${PROJECT}/revision.py "REVISION='$$(cat REVISION)'"
 	@cat ${PROJECT}/revision.py
+	@touch $@
 
 # test with tox if sources have changed
 .PHONY: tox
