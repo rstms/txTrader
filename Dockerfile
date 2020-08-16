@@ -38,6 +38,7 @@ RUN useradd -m txtrader
 WORKDIR /home/txtrader
 COPY txtrader /home/txtrader/txtrader
 COPY setup.py /home/txtrader
+COPY README.md /home/txtrader
 COPY pytest.ini /home/txtrader
 COPY tests /home/txtrader/tests
 RUN mkdir -p /home/txtrader/.local/bin

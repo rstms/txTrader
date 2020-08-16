@@ -57,7 +57,6 @@ target/
 service/down
 service/txtrader.pid
 .make-*
-runlog
 .pytest_cache/
 etc/txtrader/TXTRADER_VENV
 archive
@@ -67,5 +66,4 @@ notes
 .tox
 .docker
 .dockerhub
-txtrader/revision.py
 log

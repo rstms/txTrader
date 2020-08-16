@@ -5,10 +5,23 @@ PROJECT:=$(shell basename `pwd` | tr - _ | tr [A-Z] [a-z])
 PROJECT_NAME:=$(shell basename `pwd` | tr [A-Z] [a-z])
 ENVDIR=./env
 
+GIT_HEAD=$(shell git rev-parse --abbrev-ref HEAD)
+GIT_HASH=$(shell git log --pretty=format:'%h' -n 1)
+
+
+names:
+	$(info PROJECT=${PROJECT})
+	$(info PROJECT_NAME=${PROJECT_NAME})
+	$(info PIP=${PROJECT_NAME})
+	$(info DOCKER=${ORG}/${PROJECT_NAME})
+	$(info GIT_HEAD=${GIT_HEAD})
+	$(info GIT_HASH=${GIT_HASH})
+	@echo DIR=$$(pwd)
+
 PYTHON=python3
 
 # find all python sources (used to determine when to bump build number)
-PYTHON_SOURCES:=$(shell find setup.py ${PROJECT} tests -name '*.py')
+PYTHON_SOURCES:=$(shell find setup.py ${PROJECT} tests -name '*.py' -not -name version.py)
 OTHER_SOURCES:=Makefile Dockerfile setup.py setup.cfg tox.ini README.md LICENSE .gitignore .style.yapf
 SOURCES:=${PYTHON_SOURCES} ${OTHER_SOURCES}
 
@@ -35,9 +48,12 @@ uninstall:
 	@echo Uninstalling ${PROJECT} locally
 	${PYTHON} -m pip uninstall -y ${PROJECT} 
 
-# ensure no uncommitted changes exist
-gitclean: 
+# ensure no uncommitted changes exist and that VERSION, version.h and are correct
+gitclean:
+	$(if $(shell [ "${GIT_HEAD}" = $(shell cat VERSION) ] || echo 1), $(error version_branch_mismatch))
+	$(if $(shell [ "$$(awk -F\' '/^VERSION=/{print $$2}' <txtrader/version.py)" = "$$(cat VERSION)" ] || echo 1), $(error version.py_mismatch))
 	$(if $(shell git status --porcelain), $(error "git status dirty, commit and push first"))
+
 
 # yapf format all changed python sources
 fmt: .fmt  
@@ -46,15 +62,13 @@ fmt: .fmt
 	@touch $@
 
 # bump version in VERSION and in python source if source files have changed since last version bump
-version: VERSION
+# set version from branch name
+version: VERSION 
 VERSION: ${SOURCES}
 	@echo Changed files: $?
-	# If VERSION=major|minor or sources have changed, bump corresponding version element
-	# and commit after testing for any other uncommitted changes.
-	#
-	@pybump bump --file VERSION --level $(if ${VERSION},${VERSION},'patch')
+	@echo ${GIT_HEAD} >VERSION
 	@/bin/echo -e >${PROJECT}/version.py "DATE='$$(date +%Y-%m-%d)'\nTIME='$$(date +%H:%M:%S)'\nVERSION='$$(cat VERSION)'"
-	@echo "Version bumped to `cat VERSION`"
+	@echo "Version is $$(cat VERSION)"
 	@touch $@
 
 # test with tox if sources have changed
@@ -114,14 +128,12 @@ clean:
 	rm -rf build dist .dist ./*.egg-info .pytest_cache .tox
 	find . -type d -name __pycache__ | xargs rm -rf
 	find . -name '*.pyc' | xargs rm -f
-# txTrader makefile
 
-rebuild: fmt
-	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
+
+rebuild: fmt version
 	docker-compose build --no-cache
 
-build: fmt
-	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
+build: fmt version
 	docker-compose build 
 
 # run the service locally
@@ -140,7 +152,7 @@ stop:
 restart: stop start
 
 # run the regression tests
-TPARM?=-svx
+TPARM?=-vvx
 test: build
 	envdir ${ENVDIR} docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
 

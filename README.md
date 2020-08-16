@@ -1,35 +1,39 @@
 txTrader - Twisted Trading API Controller 
 =========================================
 
-txTrader aims to manage a connection to a trading system API and present a standardized interface.
+txTrader aims to eliminate the complexity of managing and interacting with multiple trading system APIs, presenting a native python interface.
 
-It receives incoming events from the API and maintains a current instance:
-
-  - symbols - price and quote data
-  - orders - active and completed trade orders and their associated status updates 
-  - executions - fill reports received as trades are executed
-  - positions - quantity of shares currently as reported by the API
 
 Features
 --------
 - Cross-Platform securities trading API management engine   
-- Encapsulates the interaction with the broker's API 
-- Provides a trader's eye view of the interaction with the trading system's API.    
-- Manages connection and communication details of the order management / trade execution transaction.   
-- Frees trading software from timing and architectural constraints imposed by the API implementation.
+- Provides a trader's eye view of the interaction with the trading system API.    
+- Decouples business logic from low-level implementation details of interaction with the broker's API 
+- Maintains internal data structures used to verify each step of the order management / trade execution transaction.   
+- Supports fault-tolerance by maintaining a continuous connection with the API in the event of application failure.
+- Frees trading software design from timing and architectural constraints imposed by the API implementation.
+- Built on the mature and reliable [twisted](https://twistedmatrix.com/trac/) python networking engine.
 
 
 Description
 -----------
-This system aims to present an interface to trading software comprised of objects, procedures, and events that directly represent trading activities.  Common API designs expose implementation details such as message packet parsing, message and field IDs, blocking, threading, and event handling mechanisms.  This design seems to represent the point of view of the trading software implementor. Another goal of txTrader is to decouple the application software from strict timing and sequencing requirements.  
+This system aims to present an interface to trading software composed of objects, procedures, and events that fit naturally into the design of an automated trading system.  Common trading system APIs often expose implementation details such as message packet parsing, message and field IDs.  They often have specific OS and development environment requirements.  Their use commonly requires the client application to support advanced programming techniques like blocking, threading, and event handling mechanisms.  This design seems to represent the point of view of the trading software implementer.  A goal of txTrader is to decouple the application software from strict timing and sequencing requirements.
 
-This software implemements interfaces to the API for CQG's CQGNet application and Interactive Brokers' Trader Workstation.  The servers provide access to realtime market data, historical barcharts, order management, execution reports, and position data.
+This software implements interfaces to the API for CQG's CQGNet application and Interactive Brokers' Trader Workstation.  A version has been implemented for the Realtick API, but has a dependency on a closed-source gateway.  The system provides access to real-time market data, historical pricing, bar charts, order management, execution reports, and position data.
 
-The gateway is built on the twisted python server architecture.  Each instance implements a TCP/IP ASCII line-delimited protocol as well as JSON over HTTP interface.  Both services are password protected using basic authentication and a password handshake.
+The gateway is built on the [twisted](https://twistedmatrix.com/trac/) python networking engine.  Clients can establish a long-lived TCP/IP streaming data connection using the [Netstring protocol](https://en.wikipedia.org/wiki/Netstring), and/or utilize a set of JSON-RPC functions.  Both services are password protected using basic authentication and a password handshake.   *Support for TLS connections with server and client certificates is planned.*
 
-Common interface code is used to provide identical access to CQG and TWS.  Note that the contents of the returned objects may differ.  Many fieldnames are common to the two environments.
+Common interface code is used to provide a normalized interface to the managed API.  While the contents of the returned objects may differ, many fields are common to the supported environments.
 
-Status change events are available on the TCP/IP streaming service.  The data are JSON-formatted objects.
+Status change events are available on the TCP/IP streaming service.  The data are JSON formatted objects.
+
+Client Access
+-------------
+
+The [`txtrader-client`](https://github.com/rstms/txtrader-client) module exposes the server functions to a client program as local python callables.
+The [`txtrader-monitor`](https://github.com/rstms/txtrader-monitor) module is used to receive asynchronous events from the TCP channel.  The object is configured by passing a dict with channel names and python functions to be called when data of the desired type is received.
+
+See the client access projects for usage examples.
 
 
 Dependencies
@@ -41,23 +45,25 @@ TxTrader's server daemons depend on external libraries for each configured API:
    - IbPy python wrappers for IB's java/C++ API
    - bootstrap script uses pinned fork at https://github.com/rstms/IbPy
    - https://interactivebrokers.github.io
+   - runs using IB's API gateway in a docker container, or connected to the stand-alone version of the TWS java application
 
 
  - CQG
-   - server runs under Windows
+   - server runs on Windows
    - uses win32com to access CQG's COM API
    - http://partners.cqg.com/api-resources
 
 
  - RealTick
-   - uses RTGW Txtrader GateWay running under Linux
-   - consult your RealTick customer service agent for API details
+   - uses RTGW Txtrader GateWay running on Linux
+   - Contact [the author](mailto:mkrueger@rstms.net) or your RealTick customer service agent for API details
     
 
 Installation
 ------------
+The fastest way to get started is to use [PyPI](https://pypi.org/search/?q=txtrader)
 ```
-pip install txtrader
+pip install txtrader txtrader-client txtrader-monitor
 ```
 
 Run as a local daemon process
