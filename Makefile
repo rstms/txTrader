@@ -152,7 +152,7 @@ stop:
 restart: stop start
 
 # run the regression tests
-TPARM?=-svx
+TPARM?=-vvx
 test: build
 	envdir ${ENVDIR} docker-compose run --rm --entrypoint /bin/bash txtrader -l -c 'pytest ${TPARM} ${TESTS}'
 

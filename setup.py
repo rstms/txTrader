@@ -16,18 +16,17 @@ from setuptools import setup, find_packages
 if sys.version_info < (3, 7):
     sys.exit('Python < 3.7 is not supported')
 
-long_description=''
+long_description = ''
 with open('README.md', 'r') as ifp:
-    done=False
+    done = False
     while not done:
         line = ifp.readline()
         if line.startswith('Description'):
-            done=True
+            done = True
         else:
             long_description += line
-    
-long_description=long_description.strip()
 
+long_description = long_description.strip()
 
 from txtrader import VERSION, LABEL
 
@@ -49,5 +48,5 @@ setup(
     ],
     entry_points={'console_scripts': ['txtraderd=txtrader.daemon:txtraderd']},
     include_package_data=True,
-    package_data={'': ['*.tac']},
+    package_data={'': ['*.tac', 'README.md']},
 )

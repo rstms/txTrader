@@ -26,43 +26,52 @@ FILL_TIMEOUT = 30
 
 TEST_ALGO_ROUTE = '{"TEST-ATM-ALGO":{"STRAT_ID":"BEST","BOOKING_TYPE":"3","STRAT_TIME_TAGS":"168;126","STRAT_PARAMETERS":{"99970":"2","99867":"N","847":"BEST","90057":"BEST","91000":"4.1.95"},"ORDER_FLAGS_3":"0","ORDER_CLONE_FLAG":"1","STRAT_TARGET":"ATDL","STRATEGY_NAME":"BEST","STRAT_REDUNDANT_DATA":{"UseStartTime":"false","UseEndTime":"false","cConditionalType":"{NULL}"},"STRAT_TIME_ZONE":"America/New_York","STRAT_TYPE":"COWEN_ATM_US_EQT","STRAT_STRING_40":"BEST","UTC_OFFSET":"-240"}}'
 
-testmode = 'RTX'
+TEST_MODE = 'RTX'
+TEST_HOST = os.environ['TXTRADER_HOST']
+TEST_PORT = int(os.environ['TXTRADER_HTTP_PORT'])
 
 
 def _listening(host, port, timeout=15):
     return not bool(os.system(f'wait-for-it -s {host}:{port} -t {timeout}'))
 
 
-def _wait_api_status(_api):
+def _wait_api_status(TEST_MODE, timeout=15):
     start = time.time()
     status = None
     last_status = None
+    api = None
     while status != 'Up':
-        status = _api.status()
-        if last_status != status:
-            print(f"status={status}")
-            last_status = status
-        assert (time.time() - start) < 65, 'timeout waiting for initialization'
+        try:
+            if not api:
+                api = API(TEST_MODE)
+                print(f'new api connection: {api}')
+        except Exception as ex:
+            print(f'Connection raised {ex}, retrying...')
+            api = None
+            time.sleep(1)
+        else:
+            assert api
+            try:
+                status = api.status()
+            except Exception as ex:
+                print(f'status query on {api} raised {ex}, retrying...')
+                api = None
+                time.sleep(1)
+            else:
+                if last_status != status:
+                    print(f"status={status}")
+                    last_status = status
+        assert (time.time() - start) < timeout, 'timeout waiting for initialization'
         time.sleep(1)
+    return api
 
 
 @pytest.fixture(scope='module')
 def api():
-    host = os.environ['TXTRADER_HOST']
-    port = int(os.environ['TXTRADER_HTTP_PORT'])
-    assert _listening(host, port)
-    shutdown_time = time.time()
-    api = API(testmode)
-    _wait_api_status(api)
-    shutdown = time.time()
-    print('shutting down api')
-    api.shutdown('testing shutdown request')
-    time.sleep(5)
-    print('waiting for restart...')
-    assert _listening(host, port, 30), 'timeout waiting for restart'
-    api = API(testmode)
-    _wait_api_status(api)
-    yield api
+    print('fixture: creating api connection')
+    assert _listening(TEST_HOST, TEST_PORT)
+    api = _wait_api_status(TEST_MODE)
+    return api
 
 
 def dump(label, o):
@@ -77,6 +86,32 @@ def test_init(api):
     print('waiting 1 second...')
     time.sleep(1)
     print('done')
+
+
+def test_shutdown_and_reconnect():
+    print('\nconnecting...')
+    api = _wait_api_status(TEST_MODE)
+    assert api
+    assert api.status() == 'Up'
+    shutdown_time = time.time()
+    shutdown = time.time()
+    print('shutting down api')
+    try:
+        api.shutdown('testing shutdown request')
+        print('waiting for shutdown...')
+        time.sleep(5)
+        print('waiting for restart...')
+    except Exception as ex:
+        print(f'shutdown raised {ex}')
+        assert False
+    assert _listening(TEST_HOST, TEST_PORT, 60), 'timeout waiting for restart'
+    try:
+        api = _wait_api_status(TEST_MODE, 90)
+    except Exception as ex:
+        print(f'restart raised {ex}')
+        assert False
+    assert api
+    assert api.status() == 'Up'
 
 
 def test_stock_prices(api):
@@ -343,9 +378,9 @@ def test_query_accounts(api):
 
     fields = [k for k in data if not k.startswith('_')]
 
-    if testmode == 'RTX':
+    if TEST_MODE == 'RTX':
         field = 'EXCESS_EQ'
-    elif testmode == 'TWS':
+    elif TEST_MODE == 'TWS':
         field = 'LiquidationValue'
 
     # txtrader is expected to set the value _cash to the correct field
@@ -748,9 +783,9 @@ def test_gateway_logoff(api):
 
 @pytest.mark.skip
 def test_set_primary_exchange(api):
-    if testmode == 'RTX':
+    if TEST_MODE == 'RTX':
         exchange = 'NAS'
-    elif testmode == 'TWS':
+    elif TEST_MODE == 'TWS':
         exchange = 'NASDAQ'
     assert api.set_primary_exchange('MSFT', exchange)
     assert api.add_symbol('MSFT')
