@@ -1,13 +1,22 @@
 txTrader - Twisted Trading API Controller 
 =========================================
 
-Overview - what is this thing, and what does it do?
----------------------------------------------------
+txTrader aims to manage a connection to a trading system API and present a standardized interface.
+
+It receives incoming events from the API and maintains a current instance:
+
+  - symbols - price and quote data
+  - orders - active and completed trade orders and their associated status updates 
+  - executions - fill reports received as trades are executed
+  - positions - quantity of shares currently as reported by the API
+
+Features
+--------
 - Cross-Platform securities trading API management engine   
 - Encapsulates the interaction with the broker's API 
-- Provides a trader's eye view of the interaction with the trading software API.    
+- Provides a trader's eye view of the interaction with the trading system's API.    
 - Manages connection and communication details of the order management / trade execution transaction.   
-- Frees trading software from timing and architectural constraints imposed by the order execution API.
+- Frees trading software from timing and architectural constraints imposed by the API implementation.
 
 
 Description
@@ -115,15 +124,14 @@ TXTRADER_LOCAL_RESET_TIME       | "05:00"          | time for automatic shutdown
 
 Security
 --------
-This sofware is designed to be used on private internal infrastructure.   It is *NOT* intended to be exposed to the public Internet. 
-TxTrader currently doesn't implement HTTPS and the password mechanism is rudimentary.  It is expected that access be controlled
-at the system level.
+This version of the sofware is designed to be used on private internal infrastructure.   It is *NOT* intended to be exposed to the public Internet. 
+TxTrader currently doesn't implement HTTPS and the password mechanism is rudimentary.  It is strongly recommended that access control be implemented at the network level.
 
 Security mechanisms used in existing deployments include:
  - virtual machine private networking
  - local private network addressing
  - VPN
- - docker container netorking
+ - docker container networking
  - ssh port forwarding
  - firewall rules
 
@@ -137,7 +145,7 @@ The server implements the following JSONRPC calls:
 
 ```
 
-TxTrader Securities Trading API Controller 1.12.0 (build 2408) 2020-03-11 13:33:37
+TxTrader Securities Trading API Controller 1.14.25 2020-08-10 02:23:00
 
 add_symbol('symbol')
 
@@ -192,6 +200,10 @@ query_bars('symbol', bar_period, 'start', 'end')
 
         Return array containing status strings and lists of bar data if successful
         
+query_execution('id') => {'fieldname': data, ...}
+
+        Return dict containing execution report data fields
+        
 query_executions() => {'exec_id': {'field': data, ...}, ...}
 
         Return dict keyed by execution id containing dicts of execution report data fields
@@ -199,6 +211,10 @@ query_executions() => {'exec_id': {'field': data, ...}, ...}
 query_order('id') => {'fieldname': data, ...}
 
         Return dict containing order/ticket status fields for given order id
+        
+query_executions() => {'exec_id': {'field': data, ...}, ...}
+
+        Return dict keyed by execution id containing dicts of execution report data fields given order_id
         
 query_orders() => {'order_id': {'field': data, ...}, ...}
 
@@ -271,4 +287,5 @@ uptime() => 'uptime string'
 version() => 'version string'
 
         Return string containing release version of current server instance
-``` 
+        
+```
