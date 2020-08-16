@@ -1,7 +1,7 @@
 txTrader - Twisted Trading API Controller 
 =========================================
 
-txTrader aims to eliminate the complexity of managing and interacting with multiple trading system APIs.
+txTrader aims to eliminate the complexity of managing and interacting with multiple trading system APIs, presenting a native python interface.
 
 
 Features
@@ -11,6 +11,7 @@ Features
 - Provides a trader's eye view of the interaction with the trading system API.    
 - Manages connection and communication details of the order management / trade execution transaction.   
 - Frees trading software from timing and architectural constraints imposed by the API implementation.
+- Built on the [twisted](https://twistedmatrix.com/trac/) python networking engine.
 
 
 Description
@@ -21,7 +22,7 @@ This software implements interfaces to the API for CQG's CQGNet application and 
 
 The gateway is built on the [twisted](https://twistedmatrix.com/trac/) python networking engine.  Each instance implements a connection-oriented TCP/IP streaming data connection using the [Netstring protocol](https://en.wikipedia.org/wiki/Netstring), as well as a set of HTTP endpoints returning JSON objects.  Both services are password protected using basic authentication and a password handshake.   *A version supporting TLS connections with server and client certificates is planned.*
 
-Common interface code is used to provide identical access to CQG and TWS.  Note that the contents of the returned objects may differ.  Many field names are common to the two environments.
+Common interface code is used to provide a normalized interface to the managed API.  While the contents of the returned objects may differ, many fields are common to the supported environments.
 
 Status change events are available on the TCP/IP streaming service.  The data are JSON formatted objects.
 
