@@ -5,6 +5,19 @@ PROJECT:=$(shell basename `pwd` | tr - _ | tr [A-Z] [a-z])
 PROJECT_NAME:=$(shell basename `pwd` | tr [A-Z] [a-z])
 ENVDIR=./env
 
+GIT_HEAD=$(shell git rev-parse --abbrev-ref HEAD)
+GIT_HASH=$(shell git log --pretty=format:'%h' -n 1)
+
+
+names:
+	$(info PROJECT=${PROJECT})
+	$(info PROJECT_NAME=${PROJECT_NAME})
+	$(info PIP=${PROJECT_NAME})
+	$(info DOCKER=${ORG}/${PROJECT_NAME})
+	$(info GIT_HEAD=${GIT_HEAD})
+	$(info GIT_HASH=${GIT_HASH})
+	@echo DIR=$$(pwd)
+
 PYTHON=python3
 
 # find all python sources (used to determine when to bump build number)
@@ -35,9 +48,13 @@ uninstall:
 	@echo Uninstalling ${PROJECT} locally
 	${PYTHON} -m pip uninstall -y ${PROJECT} 
 
-# ensure no uncommitted changes exist
-gitclean: 
+# ensure no uncommitted changes exist and that VERSION, version.h and revision.h are correct
+gitclean:
+	$(if $(shell [ "${GIT_HEAD}" = $(shell cat VERSION) ] || echo 1), $(error version_branch_mismatch))
+	$(if $(shell [ "$$(awk -F\' '/^VERSION=/{print $$2}' <txtrader/version.py)" = "$$(cat VERSION)" ] || echo 1), $(error version.py_mismatch))
+	$(if $(shell [ "$$(awk -F\' '/^REVISION=/{print $$2}' <txtrader/revision.py)" = "${GIT_HEAD} ${GIT_HASH}" ] || echo 1), $(error revision.py_mismatch))
 	$(if $(shell git status --porcelain), $(error "git status dirty, commit and push first"))
+
 
 # yapf format all changed python sources
 fmt: .fmt  
@@ -46,16 +63,18 @@ fmt: .fmt
 	@touch $@
 
 # bump version in VERSION and in python source if source files have changed since last version bump
+# set version from branch name
 version: VERSION
 VERSION: ${SOURCES}
 	@echo Changed files: $?
-	# If VERSION=major|minor or sources have changed, bump corresponding version element
-	# and commit after testing for any other uncommitted changes.
-	#
-	@pybump bump --file VERSION --level $(if ${VERSION},${VERSION},'patch')
+	@echo ${GIT_HEAD} >VERSION
 	@/bin/echo -e >${PROJECT}/version.py "DATE='$$(date +%Y-%m-%d)'\nTIME='$$(date +%H:%M:%S)'\nVERSION='$$(cat VERSION)'"
-	@echo "Version bumped to `cat VERSION`"
-	@touch $@
+	@echo "Version is $$(cat VERSION)"
+
+revision: REVISION
+REVISION: ${SOURCES}
+	@/bin/echo -e >${PROJECT}/revision.py "REVISION='$$(git rev-parse --abbrev-ref HEAD) $$(git log --pretty=format:'%h' -n 1)'"
+	@cat ${PROJECT}/revision.py
 
 # test with tox if sources have changed
 .PHONY: tox
@@ -114,14 +133,12 @@ clean:
 	rm -rf build dist .dist ./*.egg-info .pytest_cache .tox
 	find . -type d -name __pycache__ | xargs rm -rf
 	find . -name '*.pyc' | xargs rm -f
-# txTrader makefile
 
-rebuild: fmt
-	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
+
+rebuild: fmt version revision
 	docker-compose build --no-cache
 
-build: fmt
-	echo "REVISION='$$(git log -1 --pretty=oneline)'" >txtrader/revision.py
+build: fmt version revision 
 	docker-compose build 
 
 # run the service locally
