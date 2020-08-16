@@ -7,11 +7,12 @@ txTrader aims to eliminate the complexity of managing and interacting with multi
 Features
 --------
 - Cross-Platform securities trading API management engine   
-- Encapsulates the interaction with the broker's API 
 - Provides a trader's eye view of the interaction with the trading system API.    
-- Manages connection and communication details of the order management / trade execution transaction.   
-- Frees trading software from timing and architectural constraints imposed by the API implementation.
-- Built on the [twisted](https://twistedmatrix.com/trac/) python networking engine.
+- Decouples business logic from low-level implementation details of interaction with the broker's API 
+- Maintains internal data structures used to verify each step of the order management / trade execution transaction.   
+- Supports fault-tolerance by maintaining a continuous connection with the API in the event of application failure.
+- Frees trading software design from timing and architectural constraints imposed by the API implementation.
+- Built on the mature and reliable [twisted](https://twistedmatrix.com/trac/) python networking engine.
 
 
 Description
@@ -20,7 +21,7 @@ This system aims to present an interface to trading software composed of objects
 
 This software implements interfaces to the API for CQG's CQGNet application and Interactive Brokers' Trader Workstation.  A version has been implemented for the Realtick API, but has a dependency on a closed-source gateway.  The system provides access to real-time market data, historical pricing, bar charts, order management, execution reports, and position data.
 
-The gateway is built on the [twisted](https://twistedmatrix.com/trac/) python networking engine.  Each instance implements a connection-oriented TCP/IP streaming data connection using the [Netstring protocol](https://en.wikipedia.org/wiki/Netstring), as well as a set of HTTP endpoints returning JSON objects.  Both services are password protected using basic authentication and a password handshake.   *A version supporting TLS connections with server and client certificates is planned.*
+The gateway is built on the [twisted](https://twistedmatrix.com/trac/) python networking engine.  Clients can establish a long-lived TCP/IP streaming data connection using the [Netstring protocol](https://en.wikipedia.org/wiki/Netstring), and/or utilize a set of JSON-RPC functions.  Both services are password protected using basic authentication and a password handshake.   *Support for TLS connections with server and client certificates is planned.*
 
 Common interface code is used to provide a normalized interface to the managed API.  While the contents of the returned objects may differ, many fields are common to the supported environments.
 
