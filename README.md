@@ -33,6 +33,11 @@ Client Access
 The [`txtrader-client`](https://github.com/rstms/txtrader-client) module exposes the server functions to a client program as local python callables.
 The [`txtrader-monitor`](https://github.com/rstms/txtrader-monitor) module is used to receive asynchronous events from the TCP channel.  The object is configured by passing a dict with channel names and python functions to be called when data of the desired type is received.
 
+The JSON-RPC functions may be accessed without using the client library as follows:
+```
+curl "http://${TXTRADER_USERNAME}:${TXTRADER_PASSWORD}@${TXTRADER_HOST}:${TXTRADER_HTTP_PORT}/query_orders"
+```
+
 See the client access projects for usage examples.
 
 
