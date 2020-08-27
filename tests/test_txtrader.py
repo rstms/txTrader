@@ -242,7 +242,9 @@ def test_partial_fill(api):
     d = api.query_symbol_data(symbol)
     #pprint(d)
     now = datetime.datetime.now().strftime('%H:%M:%S')
+    print(f"trading hours: {d['STARTTIME']} to {d['STOPTIME']}")
     during_trading_hours = bool(d['STARTTIME'] <= now <= d['STOPTIME'])
+    print(f"now={now} during_trading_hours={during_trading_hours}")
     o = api.market_order(account, route, symbol, quantity)
     assert o
     assert 'permid' in o
@@ -265,7 +267,7 @@ def test_partial_fill(api):
             'status=%s filled=%s remaining=%s average_price=%s type=%s' % (status, filled, remaining, average_price, o['type'])
         )
         assert not (status == 'Filled' and filled < quantity)
-        if not during_trading_hours and status == 'Error':
+        if not during_trading_hours:
             print('test verification disabled - simulated market is closed')
             partial_fills = -1
             break
@@ -486,9 +488,9 @@ def test_trades(api):
     p = _position(api, account)
     assert p
     assert type(p) == dict
-    assert 'AAPL' in p
 
     if WAIT_FOR_FILL:
+        assert 'AAPL' in p
         assert p['AAPL'] == 100
     else:
         print('not testing order results')
@@ -496,9 +498,9 @@ def test_trades(api):
     oid = _market_order(api, 'AAPL', -10)
 
     p = _position(api, account)
-    assert 'AAPL' in p
 
     if WAIT_FOR_FILL:
+        assert 'AAPL' in p
         assert p['AAPL'] == 90
     else:
         print('not testing order results')
