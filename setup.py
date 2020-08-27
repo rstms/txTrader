@@ -48,5 +48,8 @@ setup(
     ],
     entry_points={'console_scripts': ['txtraderd=txtrader.daemon:txtraderd']},
     include_package_data=True,
-    package_data={'': ['*.tac'], '.': ['README.md']},
+    package_data={
+        '': ['*.tac'],
+        '.': ['README.md']
+    },
 )

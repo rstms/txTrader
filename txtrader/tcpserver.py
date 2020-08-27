@@ -95,10 +95,15 @@ class tcpserver(basic.NetstringReceiver):
 
     def cmd_auth(self, line):
         auth, username, password = (line).split()[:3]
-        options_field = line[len(auth) + len(username) + len(password) + 3:]
+        options_field = (line[len(auth) + len(username) + len(password) + 3:]).strip()
         if not options_field.startswith('{'):
             # legacy options are in string format: i.e. 'noquotes notrades'; convert to dict
-            self.options = {o: True for o in options_field.strip().split()}
+            if options_field == 'noquotes notrades':
+                # legacy clients sending "noquotes notrades" expect a default of {'order-notification': True}
+                self.options = {'order-notification': True}
+                self.factory.api.output(f"Setting legacy client options to: {repr(self.options)}")
+            else:
+                self.options = {o: True for o in options_field.strip().split()}
         else:
             self.options = json.loads(options_field) if options_field else {}
         if self.factory.validate(username, password):
